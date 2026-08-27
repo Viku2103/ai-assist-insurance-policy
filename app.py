@@ -201,7 +201,7 @@ def create_government_user(
         )
 
     except Exception as error:
-
+        print("SUPABASE REGISTRATION ERROR:", error)
         error_text = str(error).lower()
 
         if (
