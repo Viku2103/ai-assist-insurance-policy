@@ -2,6 +2,7 @@ import os
 import hashlib
 import hmac
 import secrets
+from datetime import datetime, timezone
 import streamlit as st
 
 from dotenv import load_dotenv
@@ -55,9 +56,13 @@ if "username" not in st.session_state:
     st.session_state.username = None
 
 
+if "user_profile" not in st.session_state:
+    st.session_state.user_profile = None
+
+
 # ==================================================
 # AUTHENTICATION DATABASE
-# Supabase PostgreSQL - persistent across deployments
+# Supabase Auth + PostgreSQL profile / approval layer
 # ==================================================
 
 load_dotenv()
@@ -65,8 +70,11 @@ load_dotenv()
 
 def get_config_value(name):
     """
-    Read configuration locally from .env and on
-    Streamlit Community Cloud from st.secrets.
+    Local development:
+        .env
+
+    Streamlit Community Cloud:
+        st.secrets
     """
 
     value = os.getenv(name)
@@ -77,24 +85,60 @@ def get_config_value(name):
     try:
         return st.secrets[name]
     except Exception:
-        logger.exception("Government login validation failed")
         return None
 
 
 SUPABASE_URL = get_config_value("SUPABASE_URL")
-SUPABASE_SECRET_KEY = get_config_value("SUPABASE_SECRET_KEY")
+SUPABASE_PUBLISHABLE_KEY = get_config_value(
+    "SUPABASE_PUBLISHABLE_KEY"
+)
+SUPABASE_SECRET_KEY = get_config_value(
+    "SUPABASE_SECRET_KEY"
+)
+
+ADMIN_USERNAME = get_config_value("ADMIN_USERNAME")
+ADMIN_PASSWORD = get_config_value("ADMIN_PASSWORD")
 
 
-@st.cache_resource(show_spinner=False)
-def get_supabase_client():
+def get_public_supabase_client():
+    """
+    Used for normal Supabase Auth operations:
+    signup, login, password recovery.
+
+    A new client is created per operation so authentication
+    sessions are not shared between Streamlit users.
+    """
+
+    if not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
+
+        logger.error(
+            "Supabase public authentication configuration is missing"
+        )
+
+        raise RuntimeError(
+            "Supabase authentication configuration is missing."
+        )
+
+    return create_client(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY
+    )
+
+
+def get_service_supabase_client():
+    """
+    Server-side client used only inside the Streamlit backend
+    for profile management and administrator operations.
+    """
 
     if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
 
-        logger.error("Supabase configuration is missing")
+        logger.error(
+            "Supabase service configuration is missing"
+        )
 
         raise RuntimeError(
-            "Supabase configuration is missing. "
-            "Set SUPABASE_URL and SUPABASE_SECRET_KEY."
+            "Supabase service configuration is missing."
         )
 
     return create_client(
@@ -102,6 +146,13 @@ def get_supabase_client():
         SUPABASE_SECRET_KEY
     )
 
+
+# --------------------------------------------------
+# LEGACY PASSWORD SUPPORT
+# --------------------------------------------------
+# Existing users created before Supabase Auth are still
+# supported so the authentication upgrade does not break
+# already-created accounts.
 
 PASSWORD_ITERATIONS = 600_000
 
@@ -155,134 +206,594 @@ def verify_password(
         return False
 
 
+# --------------------------------------------------
+# GOVERNMENT EMPLOYEE REGISTRATION
+# --------------------------------------------------
+
 def create_government_user(
-    username,
+    employee_name,
+    email,
     password,
     employee_id,
     department
 ):
 
     employee_id = employee_id.strip()
-    employee_name = username.strip()
+    employee_name = employee_name.strip()
+    email = email.strip().lower()
     department = department.strip()
+
+    service_client = None
+    auth_user_id = None
 
     try:
 
-        supabase = get_supabase_client()
+        service_client = get_service_supabase_client()
 
         existing = (
-            supabase
+            service_client
             .table("government_users")
             .select("id")
-            .eq("employee_id", employee_id)
+            .or_(
+                f"employee_id.eq.{employee_id},"
+                f"email.eq.{email}"
+            )
             .limit(1)
             .execute()
         )
 
         if existing.data:
 
-            logger.warning("Government account creation rejected: Employee ID already exists")
+            logger.warning(
+                "Government registration rejected: "
+                "Employee ID or email already exists"
+            )
 
             return (
                 False,
-                "Employee ID already exists."
+                "An account already exists with this "
+                "Employee ID or email."
             )
 
+        auth_client = get_public_supabase_client()
+
+        auth_response = auth_client.auth.sign_up(
+            {
+                "email": email,
+                "password": password,
+                "options": {
+                    "data": {
+                        "employee_id": employee_id,
+                        "employee_name": employee_name,
+                        "department": department
+                    }
+                }
+            }
+        )
+
+        if not auth_response.user:
+
+            return (
+                False,
+                "Unable to create the authentication account."
+            )
+
+        auth_user_id = str(
+            auth_response.user.id
+        )
+
         (
-            supabase
+            service_client
             .table("government_users")
             .insert(
                 {
+                    "auth_user_id": auth_user_id,
                     "employee_id": employee_id,
                     "employee_name": employee_name,
+                    "email": email,
                     "department": department,
-                    "password_hash": hash_password(
-                        password
-                    )
+
+                    # Existing table compatibility.
+                    # New passwords are managed only by Supabase Auth.
+                    "password_hash": "SUPABASE_AUTH",
+
+                    "status": "pending",
+                    "role": "government",
+                    "is_active": True
                 }
             )
             .execute()
         )
 
-        logger.info("Government employee account created successfully")
+        logger.info(
+            "Government employee registration created "
+            "and placed in pending approval"
+        )
 
         return (
             True,
-            "Government account created successfully."
+            "Account created successfully. "
+            "Please verify your email if Supabase sends a "
+            "verification message, then wait for administrator approval."
         )
 
     except Exception as error:
 
+        # If Auth succeeded but the profile insert failed,
+        # remove the partial Auth user to keep the systems consistent.
+        if auth_user_id and service_client:
+
+            try:
+                service_client.auth.admin.delete_user(
+                    auth_user_id
+                )
+            except Exception:
+                logger.exception(
+                    "Unable to roll back incomplete Auth registration"
+                )
+
         error_text = str(error).lower()
 
         if (
-            "duplicate" in error_text
+            "already registered" in error_text
+            or "duplicate" in error_text
             or "unique" in error_text
             or "23505" in error_text
         ):
 
-            logger.warning("Government account creation rejected: Duplicate Employee ID")
+            logger.warning(
+                "Government registration rejected: Duplicate account"
+            )
 
             return (
                 False,
-                "Employee ID already exists."
+                "An account already exists with this "
+                "Employee ID or email."
             )
 
-        logger.exception("Government account creation failed")
+        logger.exception(
+            "Government employee registration failed"
+        )
 
         return (
             False,
-            "Unable to create account. "
-            "Please try again."
+            "Unable to create account. Please try again."
         )
 
+
+# --------------------------------------------------
+# GOVERNMENT LOGIN
+# --------------------------------------------------
 
 def validate_government_user(
     employee_id,
     password
 ):
 
+    employee_id = employee_id.strip()
+
     try:
 
-        supabase = get_supabase_client()
+        service_client = get_service_supabase_client()
 
         response = (
-            supabase
+            service_client
             .table("government_users")
             .select(
-                "id, employee_id, employee_name, "
-                "department, password_hash"
+                "id, auth_user_id, employee_id, employee_name, "
+                "email, department, password_hash, status, "
+                "role, is_active"
             )
             .eq(
                 "employee_id",
-                employee_id.strip()
+                employee_id
             )
             .limit(1)
             .execute()
         )
 
         if not response.data:
-            logger.warning("Government login failed: Employee ID not found")
-            return None
+
+            logger.warning(
+                "Government login failed: Employee ID not found"
+            )
+
+            return (
+                None,
+                "Invalid Employee ID or password."
+            )
 
         user = response.data[0]
 
-        if not verify_password(
-            password,
-            user.get("password_hash")
-        ):
-            logger.warning("Government login failed: Invalid password")
-            return None
+        auth_user_id = user.get(
+            "auth_user_id"
+        )
 
-        return {
-            "id": user.get("id"),
-            "employee_id": user.get("employee_id"),
-            "employee_name": user.get("employee_name"),
-            "department": user.get("department")
-        }
+        email = user.get(
+            "email"
+        )
+
+        # ------------------------------------------
+        # NEW SUPABASE AUTH ACCOUNT
+        # ------------------------------------------
+
+        if auth_user_id and email:
+
+            try:
+
+                auth_client = get_public_supabase_client()
+
+                auth_response = (
+                    auth_client
+                    .auth
+                    .sign_in_with_password(
+                        {
+                            "email": email,
+                            "password": password
+                        }
+                    )
+                )
+
+                if not auth_response.user:
+
+                    return (
+                        None,
+                        "Invalid Employee ID or password."
+                    )
+
+            except Exception:
+
+                logger.warning(
+                    "Government login failed: "
+                    "Supabase Auth rejected credentials"
+                )
+
+                return (
+                    None,
+                    "Invalid Employee ID or password. "
+                    "If you recently registered, also make sure "
+                    "your email has been verified."
+                )
+
+        # ------------------------------------------
+        # LEGACY ACCOUNT FALLBACK
+        # ------------------------------------------
+
+        else:
+
+            if not verify_password(
+                password,
+                user.get("password_hash")
+            ):
+
+                logger.warning(
+                    "Legacy government login failed: Invalid password"
+                )
+
+                return (
+                    None,
+                    "Invalid Employee ID or password."
+                )
+
+        # Credentials are valid. Now enforce application access.
+
+        if not user.get(
+            "is_active",
+            True
+        ):
+
+            logger.warning(
+                "Government login blocked: Account disabled"
+            )
+
+            return (
+                None,
+                "Your account has been disabled. "
+                "Please contact the administrator."
+            )
+
+        status = (
+            user.get("status")
+            or "approved"
+        ).lower()
+
+        if status == "pending":
+
+            return (
+                None,
+                "Your account is waiting for administrator approval."
+            )
+
+        if status == "rejected":
+
+            return (
+                None,
+                "Your account request was rejected. "
+                "Please contact the administrator."
+            )
+
+        if status != "approved":
+
+            return (
+                None,
+                "Your account is not approved for access."
+            )
+
+        return (
+            {
+                "id": user.get("id"),
+                "auth_user_id": auth_user_id,
+                "employee_id": user.get("employee_id"),
+                "employee_name": user.get("employee_name"),
+                "email": email,
+                "department": user.get("department"),
+                "role": user.get("role", "government")
+            },
+            "Login successful."
+        )
 
     except Exception:
-        return None
+
+        logger.exception(
+            "Government login validation failed"
+        )
+
+        return (
+            None,
+            "Unable to sign in at the moment. Please try again."
+        )
+
+
+# --------------------------------------------------
+# FORGOT PASSWORD
+# --------------------------------------------------
+
+def send_password_reset_code(
+    email
+):
+
+    email = email.strip().lower()
+
+    try:
+
+        auth_client = get_public_supabase_client()
+
+        auth_client.auth.reset_password_for_email(
+            email
+        )
+
+        logger.info(
+            "Password recovery request submitted"
+        )
+
+        # Intentionally generic to avoid revealing
+        # whether an email exists in the system.
+        return (
+            True,
+            "If the email is registered, a password "
+            "recovery message has been sent."
+        )
+
+    except Exception:
+
+        logger.exception(
+            "Password recovery request failed"
+        )
+
+        return (
+            False,
+            "Unable to send the password recovery message."
+        )
+
+
+def complete_password_reset(
+    email,
+    recovery_code,
+    new_password
+):
+
+    email = email.strip().lower()
+    recovery_code = recovery_code.strip()
+
+    try:
+
+        auth_client = get_public_supabase_client()
+
+        verification = auth_client.auth.verify_otp(
+            {
+                "email": email,
+                "token": recovery_code,
+                "type": "recovery"
+            }
+        )
+
+        if not verification.user:
+
+            return (
+                False,
+                "Invalid or expired recovery code."
+            )
+
+        auth_client.auth.update_user(
+            {
+                "password": new_password
+            }
+        )
+
+        logger.info(
+            "Government user password reset completed"
+        )
+
+        return (
+            True,
+            "Password updated successfully. "
+            "You can now sign in with the new password."
+        )
+
+    except Exception:
+
+        logger.exception(
+            "Password recovery verification failed"
+        )
+
+        return (
+            False,
+            "Invalid or expired recovery code."
+        )
+
+
+# --------------------------------------------------
+# ADMIN AUTHENTICATION
+# --------------------------------------------------
+
+def validate_admin(
+    username,
+    password
+):
+
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+
+        logger.error(
+            "Administrator credentials are not configured"
+        )
+
+        return False
+
+    username_ok = hmac.compare_digest(
+        username.strip(),
+        ADMIN_USERNAME
+    )
+
+    password_ok = hmac.compare_digest(
+        password,
+        ADMIN_PASSWORD
+    )
+
+    return (
+        username_ok
+        and password_ok
+    )
+
+
+# --------------------------------------------------
+# ADMIN USER MANAGEMENT
+# --------------------------------------------------
+
+def get_government_users():
+
+    try:
+
+        service_client = get_service_supabase_client()
+
+        response = (
+            service_client
+            .table("government_users")
+            .select(
+                "id, auth_user_id, employee_id, employee_name, "
+                "email, department, status, role, is_active, "
+                "created_at, approved_at, approved_by"
+            )
+            .order(
+                "created_at",
+                desc=True
+            )
+            .execute()
+        )
+
+        return response.data or []
+
+    except Exception:
+
+        logger.exception(
+            "Unable to retrieve government users for admin dashboard"
+        )
+
+        return []
+
+
+def set_government_user_status(
+    row_id,
+    status
+):
+
+    try:
+
+        service_client = get_service_supabase_client()
+
+        values = {
+            "status": status
+        }
+
+        if status == "approved":
+
+            values["approved_at"] = (
+                datetime.now(
+                    timezone.utc
+                ).isoformat()
+            )
+
+            values["approved_by"] = (
+                ADMIN_USERNAME
+                or "administrator"
+            )
+
+        (
+            service_client
+            .table("government_users")
+            .update(values)
+            .eq("id", row_id)
+            .execute()
+        )
+
+        logger.info(
+            "Administrator changed government account status"
+        )
+
+        return True
+
+    except Exception:
+
+        logger.exception(
+            "Administrator status update failed"
+        )
+
+        return False
+
+
+def set_government_user_active(
+    row_id,
+    is_active
+):
+
+    try:
+
+        service_client = get_service_supabase_client()
+
+        (
+            service_client
+            .table("government_users")
+            .update(
+                {
+                    "is_active": is_active
+                }
+            )
+            .eq("id", row_id)
+            .execute()
+        )
+
+        logger.info(
+            "Administrator changed government account active state"
+        )
+
+        return True
+
+    except Exception:
+
+        logger.exception(
+            "Administrator active-state update failed"
+        )
+
+        return False
 
 
 # ==================================================
@@ -525,7 +1036,7 @@ if not st.session_state.logged_in:
 
 
     image_col, login_col = st.columns(
-        [1.15, 0.85],
+        [1.0, 1.0],
         gap="large"
     )
 
@@ -551,13 +1062,13 @@ if not st.session_state.logged_in:
 
 
     # ----------------------------------------------
-    # RIGHT LOGIN
+    # RIGHT ACCESS PANEL
     # ----------------------------------------------
 
     with login_col:
 
         st.markdown(
-            "<div style='height:10px'></div>",
+            "<div style='height:8px'></div>",
             unsafe_allow_html=True
         )
 
@@ -572,22 +1083,28 @@ if not st.session_state.logged_in:
             </div>
 
             <div class="login-subtitle">
-                Public users can continue directly to the synthetic
-                insurance knowledge base. Government employees can
-                create an account using their Employee ID and use the
-                same Employee ID to sign in later.
+                Public users can explore synthetic insurance
+                information directly. Government employees use
+                approved accounts for government scheme access.
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        public_tab, govt_login_tab, govt_signup_tab = st.tabs(
+        (
+            public_tab,
+            govt_login_tab,
+            govt_signup_tab,
+            forgot_password_tab
+        ) = st.tabs(
             [
-                "🌐 Public Access",
+                "🌐 Public",
                 "🏛️ Government Login",
-                "📝 Create Account"
+                "📝 Register",
+                "🔑 Forgot Password"
             ]
         )
+
 
         # ==========================================
         # PUBLIC ACCESS
@@ -596,8 +1113,8 @@ if not st.session_state.logged_in:
         with public_tab:
 
             st.caption(
-                "Public access is limited to the Synthetic "
-                "Insurance knowledge base."
+                "Public access is limited to the "
+                "Synthetic Insurance knowledge base."
             )
 
             if st.button(
@@ -610,11 +1127,17 @@ if not st.session_state.logged_in:
                 st.session_state.logged_in = True
                 st.session_state.user_role = "public"
                 st.session_state.username = "public"
-                logger.info("Public user access started")
+                st.session_state.user_profile = None
+
+                logger.info(
+                    "Public user access started"
+                )
+
                 st.rerun()
 
+
         # ==========================================
-        # GOVERNMENT EMPLOYEE LOGIN
+        # GOVERNMENT LOGIN
         # ==========================================
 
         with govt_login_tab:
@@ -641,37 +1164,46 @@ if not st.session_state.logged_in:
 
             if govt_login_button:
 
-                government_user = validate_government_user(
-                    employee_id_login,
-                    govt_login_password
+                government_user, message = (
+                    validate_government_user(
+                        employee_id_login,
+                        govt_login_password
+                    )
                 )
 
                 if government_user:
 
                     st.session_state.logged_in = True
                     st.session_state.user_role = "government"
-                    st.session_state.username = government_user[
-                        "employee_id"
-                    ]
-                    logger.info("Government employee login successful")
+                    st.session_state.username = (
+                        government_user[
+                            "employee_id"
+                        ]
+                    )
+                    st.session_state.user_profile = (
+                        government_user
+                    )
+
+                    logger.info(
+                        "Government employee login successful"
+                    )
+
                     st.rerun()
 
                 else:
 
-                    st.error(
-                        "Invalid Employee ID or password."
-                    )
+                    st.error(message)
+
 
         # ==========================================
-        # GOVERNMENT EMPLOYEE ACCOUNT CREATION
+        # GOVERNMENT ACCOUNT REGISTRATION
         # ==========================================
 
         with govt_signup_tab:
 
             st.caption(
-                "Create your government employee account once. "
-                "After registration, use your Employee ID and "
-                "password in the Government Login tab."
+                "New government accounts require administrator "
+                "approval before government scheme access."
             )
 
             govt_employee_id = st.text_input(
@@ -684,6 +1216,12 @@ if not st.session_state.logged_in:
                 "Employee Name",
                 placeholder="Enter employee name",
                 key="govt_signup_username"
+            )
+
+            govt_email = st.text_input(
+                "Official / Registered Email",
+                placeholder="name@example.com",
+                key="govt_signup_email"
             )
 
             govt_department = st.text_input(
@@ -707,7 +1245,7 @@ if not st.session_state.logged_in:
             )
 
             create_account_button = st.button(
-                "📝 Create Employee Account",
+                "📝 Submit Registration",
                 use_container_width=True,
                 key="create_government_account"
             )
@@ -718,63 +1256,264 @@ if not st.session_state.logged_in:
                     [
                         govt_employee_id.strip(),
                         govt_username.strip(),
+                        govt_email.strip(),
                         govt_department.strip(),
                         govt_password
                     ]
                 ):
 
-                    logger.warning("Government account creation validation failed: Missing fields")
+                    logger.warning(
+                        "Government registration validation "
+                        "failed: Missing fields"
+                    )
+
                     st.warning(
                         "Please complete all account fields."
                     )
 
-                elif govt_password != govt_confirm_password:
+                elif (
+                    "@" not in govt_email
+                    or "." not in govt_email
+                ):
 
-                    logger.warning("Government account creation validation failed: Password mismatch")
+                    st.warning(
+                        "Please enter a valid email address."
+                    )
+
+                elif (
+                    govt_password
+                    != govt_confirm_password
+                ):
+
+                    logger.warning(
+                        "Government registration validation "
+                        "failed: Password mismatch"
+                    )
+
                     st.warning(
                         "Passwords do not match."
                     )
 
-                elif len(govt_password) < 6:
+                elif len(govt_password) < 8:
 
-                    logger.warning("Government account creation validation failed: Password too short")
                     st.warning(
-                        "Password must contain at least 6 characters."
+                        "Password must contain at least "
+                        "8 characters."
                     )
 
                 else:
 
-                    success, message = create_government_user(
-                        govt_username,
-                        govt_password,
-                        govt_employee_id,
-                        govt_department
+                    success, message = (
+                        create_government_user(
+                            govt_username,
+                            govt_email,
+                            govt_password,
+                            govt_employee_id,
+                            govt_department
+                        )
                     )
 
                     if success:
 
-                        st.success(
-                            "Account created successfully. "
-                            "You can now sign in using your "
-                            "Employee ID and password."
-                        )
+                        st.success(message)
 
                     else:
 
                         st.error(message)
+
+
+        # ==========================================
+        # FORGOT PASSWORD
+        # ==========================================
+
+        with forgot_password_tab:
+
+            st.caption(
+                "Password recovery is available for "
+                "email-linked Supabase Auth accounts."
+            )
+
+            recovery_email = st.text_input(
+                "Registered Email",
+                placeholder="name@example.com",
+                key="password_recovery_email"
+            )
+
+            if st.button(
+                "📧 Send Recovery Code",
+                use_container_width=True,
+                key="send_recovery_code"
+            ):
+
+                if not recovery_email.strip():
+
+                    st.warning(
+                        "Please enter your registered email."
+                    )
+
+                else:
+
+                    success, message = (
+                        send_password_reset_code(
+                            recovery_email
+                        )
+                    )
+
+                    if success:
+                        st.success(message)
+                    else:
+                        st.error(message)
+
+            st.divider()
+
+            st.caption(
+                "After receiving the recovery code, "
+                "enter it below with your new password."
+            )
+
+            recovery_email_confirm = st.text_input(
+                "Email for Verification",
+                placeholder="name@example.com",
+                key="password_reset_email_confirm"
+            )
+
+            recovery_code = st.text_input(
+                "Recovery Code",
+                placeholder="Enter the code received by email",
+                key="password_recovery_code"
+            )
+
+            new_password = st.text_input(
+                "New Password",
+                type="password",
+                key="new_recovery_password"
+            )
+
+            confirm_new_password = st.text_input(
+                "Confirm New Password",
+                type="password",
+                key="confirm_new_recovery_password"
+            )
+
+            if st.button(
+                "🔑 Update Password",
+                type="primary",
+                use_container_width=True,
+                key="complete_password_reset"
+            ):
+
+                if not all(
+                    [
+                        recovery_email_confirm.strip(),
+                        recovery_code.strip(),
+                        new_password
+                    ]
+                ):
+
+                    st.warning(
+                        "Please complete all password reset fields."
+                    )
+
+                elif (
+                    new_password
+                    != confirm_new_password
+                ):
+
+                    st.warning(
+                        "Passwords do not match."
+                    )
+
+                elif len(new_password) < 8:
+
+                    st.warning(
+                        "Password must contain at least "
+                        "8 characters."
+                    )
+
+                else:
+
+                    success, message = (
+                        complete_password_reset(
+                            recovery_email_confirm,
+                            recovery_code,
+                            new_password
+                        )
+                    )
+
+                    if success:
+                        st.success(message)
+                    else:
+                        st.error(message)
+
+
+        # ==========================================
+        # ADMIN LOGIN
+        # ==========================================
+
+        with st.expander(
+            "🛡️ Administrator Access",
+            expanded=False
+        ):
+
+            admin_username = st.text_input(
+                "Administrator Username",
+                key="admin_login_username"
+            )
+
+            admin_password = st.text_input(
+                "Administrator Password",
+                type="password",
+                key="admin_login_password"
+            )
+
+            if st.button(
+                "🛡️ Administrator Sign In",
+                use_container_width=True,
+                key="admin_signin_button"
+            ):
+
+                if validate_admin(
+                    admin_username,
+                    admin_password
+                ):
+
+                    st.session_state.logged_in = True
+                    st.session_state.user_role = "admin"
+                    st.session_state.username = (
+                        ADMIN_USERNAME
+                    )
+                    st.session_state.user_profile = None
+
+                    logger.info(
+                        "Administrator login successful"
+                    )
+
+                    st.rerun()
+
+                else:
+
+                    logger.warning(
+                        "Administrator login failed"
+                    )
+
+                    st.error(
+                        "Invalid administrator credentials."
+                    )
+
 
         st.markdown(
             """
             <div class="login-security">
                 🔒 <strong>Secure Access</strong>
                 &nbsp; • &nbsp;
-                📄 <strong>Source Grounded</strong>
+                👤 <strong>Admin Approval</strong>
                 &nbsp; • &nbsp;
                 🤖 <strong>AI Powered</strong>
             </div>
             """,
             unsafe_allow_html=True
         )
+
 
     st.stop()
 
@@ -1186,6 +1925,20 @@ with st.sidebar:
 
     st.divider()
 
+    admin_workspace = "RAG Assistant"
+
+    if st.session_state.user_role == "admin":
+
+        admin_workspace = st.selectbox(
+            "🛡️ Administrator Workspace",
+            [
+                "RAG Assistant",
+                "User Administration"
+            ]
+        )
+
+        st.divider()
+
     st.subheader("📚 Choose Knowledge Base")
 
     # Public users can access only the synthetic
@@ -1254,7 +2007,8 @@ with st.sidebar:
 
     role_labels = {
         "public": "🌐 Public User",
-        "government": "🏛️ Government User"
+        "government": "🏛️ Government User",
+        "admin": "🛡️ Administrator"
     }
 
     st.caption(
@@ -1275,7 +2029,291 @@ with st.sidebar:
         st.session_state.logged_in = False
         st.session_state.user_role = None
         st.session_state.username = None
+        st.session_state.user_profile = None
         st.rerun()
+
+
+# ==================================================
+# ADMIN USER MANAGEMENT DASHBOARD
+# ==================================================
+
+if (
+    st.session_state.user_role == "admin"
+    and admin_workspace == "User Administration"
+):
+
+    st.title(
+        "🛡️ Government User Administration"
+    )
+
+    st.caption(
+        "Review registrations, approve or reject access, "
+        "and enable or disable government user accounts."
+    )
+
+    st.divider()
+
+    government_users = get_government_users()
+
+    pending_count = sum(
+        1
+        for user in government_users
+        if (
+            user.get("status")
+            or "approved"
+        ).lower() == "pending"
+    )
+
+    approved_count = sum(
+        1
+        for user in government_users
+        if (
+            user.get("status")
+            or "approved"
+        ).lower() == "approved"
+    )
+
+    disabled_count = sum(
+        1
+        for user in government_users
+        if not user.get(
+            "is_active",
+            True
+        )
+    )
+
+    metric1, metric2, metric3 = st.columns(3)
+
+    metric1.metric(
+        "Pending Approval",
+        pending_count
+    )
+
+    metric2.metric(
+        "Approved Users",
+        approved_count
+    )
+
+    metric3.metric(
+        "Disabled Accounts",
+        disabled_count
+    )
+
+    st.divider()
+
+    status_filter = st.selectbox(
+        "Filter accounts",
+        [
+            "All",
+            "Pending",
+            "Approved",
+            "Rejected",
+            "Disabled"
+        ]
+    )
+
+    filtered_users = []
+
+    for user in government_users:
+
+        status = (
+            user.get("status")
+            or "approved"
+        ).lower()
+
+        is_active = user.get(
+            "is_active",
+            True
+        )
+
+        if status_filter == "All":
+            filtered_users.append(user)
+
+        elif (
+            status_filter == "Pending"
+            and status == "pending"
+        ):
+            filtered_users.append(user)
+
+        elif (
+            status_filter == "Approved"
+            and status == "approved"
+        ):
+            filtered_users.append(user)
+
+        elif (
+            status_filter == "Rejected"
+            and status == "rejected"
+        ):
+            filtered_users.append(user)
+
+        elif (
+            status_filter == "Disabled"
+            and not is_active
+        ):
+            filtered_users.append(user)
+
+
+    if not filtered_users:
+
+        st.info(
+            "No government user accounts match this filter."
+        )
+
+
+    for user in filtered_users:
+
+        row_id = user.get("id")
+
+        employee_name = (
+            user.get("employee_name")
+            or "Unknown Employee"
+        )
+
+        employee_id = (
+            user.get("employee_id")
+            or "-"
+        )
+
+        email = (
+            user.get("email")
+            or "Legacy account – email not linked"
+        )
+
+        department = (
+            user.get("department")
+            or "-"
+        )
+
+        status = (
+            user.get("status")
+            or "approved"
+        ).lower()
+
+        is_active = user.get(
+            "is_active",
+            True
+        )
+
+        status_icon = {
+            "pending": "🟡",
+            "approved": "🟢",
+            "rejected": "🔴"
+        }.get(
+            status,
+            "⚪"
+        )
+
+        with st.expander(
+            f"{status_icon} {employee_name} • {employee_id}",
+            expanded=(
+                status == "pending"
+            )
+        ):
+
+            st.write(
+                f"**Email:** {email}"
+            )
+
+            st.write(
+                f"**Department:** {department}"
+            )
+
+            st.write(
+                f"**Status:** {status.title()}"
+            )
+
+            st.write(
+                "**Account:** "
+                + (
+                    "Active"
+                    if is_active
+                    else "Disabled"
+                )
+            )
+
+            action1, action2, action3 = st.columns(3)
+
+            with action1:
+
+                if st.button(
+                    "✅ Approve",
+                    key=f"approve_{row_id}",
+                    use_container_width=True
+                ):
+
+                    if set_government_user_status(
+                        row_id,
+                        "approved"
+                    ):
+
+                        st.success(
+                            "Account approved."
+                        )
+
+                        st.rerun()
+
+            with action2:
+
+                if st.button(
+                    "❌ Reject",
+                    key=f"reject_{row_id}",
+                    use_container_width=True
+                ):
+
+                    if set_government_user_status(
+                        row_id,
+                        "rejected"
+                    ):
+
+                        st.success(
+                            "Account rejected."
+                        )
+
+                        st.rerun()
+
+            with action3:
+
+                if is_active:
+
+                    if st.button(
+                        "⛔ Disable",
+                        key=f"disable_{row_id}",
+                        use_container_width=True
+                    ):
+
+                        if set_government_user_active(
+                            row_id,
+                            False
+                        ):
+
+                            st.success(
+                                "Account disabled."
+                            )
+
+                            st.rerun()
+
+                else:
+
+                    if st.button(
+                        "♻️ Enable",
+                        key=f"enable_{row_id}",
+                        use_container_width=True
+                    ):
+
+                        if set_government_user_active(
+                            row_id,
+                            True
+                        ):
+
+                            st.success(
+                                "Account enabled."
+                            )
+
+                            st.rerun()
+
+
+    st.stop()
 
 
 # ==================================================
