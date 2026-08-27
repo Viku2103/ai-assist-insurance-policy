@@ -327,9 +327,13 @@ if not st.session_state.logged_in:
         }
 
         .block-container {
+            width: 96% !important;
             max-width: 1320px !important;
-            padding-top: 2rem !important;
+            margin: 0 auto !important;
+            padding-top: 1.5rem !important;
             padding-bottom: 1rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
         }
 
         [data-testid="stImage"] {
@@ -341,7 +345,8 @@ if not st.session_state.logged_in:
 
         [data-testid="stImage"] img {
             width: 100% !important;
-            max-height: 520px !important;
+            height: auto !important;
+            max-height: 470px !important;
             object-fit: contain !important;
             border-radius: 18px !important;
 
@@ -369,7 +374,7 @@ if not st.session_state.logged_in:
 
         .login-title {
             color: #142b4d !important;
-            font-size: 34px;
+            font-size: clamp(28px, 3vw, 34px);
             font-weight: 800;
             line-height: 1.1;
             margin-bottom: 6px;
@@ -462,6 +467,57 @@ if not st.session_state.logged_in:
             color: #334c6c !important;
         }
 
+
+        /* ---------- Responsive login ---------- */
+        div[data-baseweb="tab-list"] {
+            width: 100% !important;
+            display: flex !important;
+            gap: 2px !important;
+        }
+
+        button[data-baseweb="tab"] {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            padding-left: 4px !important;
+            padding-right: 4px !important;
+        }
+
+        button[data-baseweb="tab"] p {
+            white-space: normal !important;
+            text-align: center !important;
+            line-height: 1.2 !important;
+            font-size: clamp(11px, 1vw, 14px) !important;
+        }
+
+        @media (max-width: 900px) {
+            [data-testid="stImage"] img {
+                max-height: 340px !important;
+            }
+
+            .login-title {
+                font-size: 28px !important;
+            }
+
+            .login-subtitle {
+                font-size: 13px !important;
+            }
+        }
+
+        @media (max-width: 650px) {
+            .block-container {
+                width: 98% !important;
+                padding-left: 0.6rem !important;
+                padding-right: 0.6rem !important;
+            }
+
+            [data-testid="stImage"] img {
+                max-height: 240px !important;
+            }
+
+            button[data-baseweb="tab"] p {
+                font-size: 10.5px !important;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -529,7 +585,7 @@ if not st.session_state.logged_in:
             [
                 "🌐 Public Access",
                 "🏛️ Government Login",
-                "📝 Create Government Account"
+                "📝 Create Account"
             ]
         )
 
@@ -748,11 +804,13 @@ st.markdown(
     }
 
     .block-container {
+        width: 96% !important;
         max-width: 1220px !important;
-        padding-top: 1.15rem !important;
+        margin: 0 auto !important;
+        padding-top: 1rem !important;
         padding-bottom: 2rem !important;
-        padding-left: 1.6rem !important;
-        padding-right: 1.6rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
 
     /* ---------- Sidebar ---------- */
@@ -801,8 +859,8 @@ st.markdown(
 
     .hero-grid {
         display: grid;
-        grid-template-columns: 1fr 280px;
-        gap: 28px;
+        grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
+        gap: 24px;
         align-items: center;
     }
 
@@ -816,7 +874,7 @@ st.markdown(
 
     .hero-title {
         color: #17345f;
-        font-size: 46px;
+        font-size: clamp(34px, 4vw, 46px);
         line-height: 1.02;
         font-weight: 900;
         letter-spacing: -1.8px;
@@ -831,14 +889,14 @@ st.markdown(
 
     .hero-subtitle {
         color: #244770;
-        font-size: 23px;
+        font-size: clamp(18px, 2.2vw, 23px);
         font-weight: 800;
         margin-bottom: 14px;
     }
 
     .hero-copy {
         color: #5c6f89;
-        font-size: 16px;
+        font-size: clamp(14px, 1.3vw, 16px);
         line-height: 1.72;
         max-width: 720px;
     }
@@ -1049,15 +1107,52 @@ st.markdown(
     }
 
     /* ---------- Responsive ---------- */
+    @media (max-width: 1000px) {
+        .hero-grid {
+            grid-template-columns: minmax(0, 1fr) 210px;
+        }
+    }
+
     @media (max-width: 900px) {
         .hero-grid {
             grid-template-columns: 1fr;
         }
+
         .hero-visual {
             display: none;
         }
+
         .hero-title {
-            font-size: 44px;
+            font-size: 36px;
+        }
+    }
+
+    @media (max-width: 650px) {
+        .block-container {
+            width: 98% !important;
+            padding-left: 0.6rem !important;
+            padding-right: 0.6rem !important;
+        }
+
+        .hero-shell {
+            padding: 18px !important;
+            border-radius: 18px !important;
+        }
+
+        .hero-title {
+            font-size: 31px;
+        }
+
+        .hero-subtitle {
+            font-size: 18px;
+        }
+
+        .feature-card {
+            min-height: auto;
+        }
+
+        .kb-strip {
+            flex-wrap: wrap;
         }
     }
     </style>
