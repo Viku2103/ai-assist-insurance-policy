@@ -9,6 +9,10 @@ from supabase import create_client
 
 from src.generation.rag_chain import stream_answer
 from src.retrieval.retriever import get_retriever
+from src.logging_config.logger import get_logger
+
+logger = get_logger(__name__)
+logger.info("AI Assist application started")
 
 
 # ==================================================
@@ -73,6 +77,7 @@ def get_config_value(name):
     try:
         return st.secrets[name]
     except Exception:
+        logger.exception("Government login validation failed")
         return None
 
 
@@ -84,6 +89,8 @@ SUPABASE_SECRET_KEY = get_config_value("SUPABASE_SECRET_KEY")
 def get_supabase_client():
 
     if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+
+        logger.error("Supabase configuration is missing")
 
         raise RuntimeError(
             "Supabase configuration is missing. "
@@ -174,6 +181,8 @@ def create_government_user(
 
         if existing.data:
 
+            logger.warning("Government account creation rejected: Employee ID already exists")
+
             return (
                 False,
                 "Employee ID already exists."
@@ -195,14 +204,14 @@ def create_government_user(
             .execute()
         )
 
+        logger.info("Government employee account created successfully")
+
         return (
             True,
             "Government account created successfully."
         )
 
     except Exception as error:
-
-        
 
         error_text = str(error).lower()
 
@@ -212,15 +221,21 @@ def create_government_user(
             or "23505" in error_text
         ):
 
+            logger.warning("Government account creation rejected: Duplicate Employee ID")
+
             return (
                 False,
                 "Employee ID already exists."
             )
 
+        logger.exception("Government account creation failed")
+
         return (
-             False,
-            "Unable to create account. Please try again."
-            )
+            False,
+            "Unable to create account. "
+            "Please try again."
+        )
+
 
 def validate_government_user(
     employee_id,
@@ -247,6 +262,7 @@ def validate_government_user(
         )
 
         if not response.data:
+            logger.warning("Government login failed: Employee ID not found")
             return None
 
         user = response.data[0]
@@ -255,6 +271,7 @@ def validate_government_user(
             password,
             user.get("password_hash")
         ):
+            logger.warning("Government login failed: Invalid password")
             return None
 
         return {
@@ -537,6 +554,7 @@ if not st.session_state.logged_in:
                 st.session_state.logged_in = True
                 st.session_state.user_role = "public"
                 st.session_state.username = "public"
+                logger.info("Public user access started")
                 st.rerun()
 
         # ==========================================
@@ -579,6 +597,7 @@ if not st.session_state.logged_in:
                     st.session_state.username = government_user[
                         "employee_id"
                     ]
+                    logger.info("Government employee login successful")
                     st.rerun()
 
                 else:
@@ -648,18 +667,21 @@ if not st.session_state.logged_in:
                     ]
                 ):
 
+                    logger.warning("Government account creation validation failed: Missing fields")
                     st.warning(
                         "Please complete all account fields."
                     )
 
                 elif govt_password != govt_confirm_password:
 
+                    logger.warning("Government account creation validation failed: Password mismatch")
                     st.warning(
                         "Passwords do not match."
                     )
 
                 elif len(govt_password) < 6:
 
+                    logger.warning("Government account creation validation failed: Password too short")
                     st.warning(
                         "Password must contain at least 6 characters."
                     )
@@ -1150,6 +1172,11 @@ with st.sidebar:
         use_container_width=True
     ):
 
+        logger.info(
+            "User logged out | role=%s",
+            st.session_state.user_role
+        )
+
         st.session_state.logged_in = False
         st.session_state.user_role = None
         st.session_state.username = None
@@ -1355,6 +1382,8 @@ if ask_button:
 
     if not question.strip():
 
+        logger.warning("Question submission rejected: Empty question")
+
         st.warning(
             "Please enter an insurance-related question."
         )
@@ -1362,6 +1391,11 @@ if ask_button:
     else:
 
         try:
+
+            logger.info(
+                "Policy query processing started | scheme=%s",
+                selected_scheme
+            )
 
             # ------------------------------------------
             # RETRIEVAL
@@ -1377,6 +1411,12 @@ if ask_button:
 
                 documents = retriever.invoke(
                     question
+                )
+
+                logger.info(
+                    "Document retrieval completed | scheme=%s | documents=%d",
+                    selected_scheme,
+                    len(documents)
                 )
 
 
@@ -1397,6 +1437,11 @@ if ask_button:
 
             st.write_stream(
                 answer_stream
+            )
+
+            logger.info(
+                "RAG answer generated successfully | scheme=%s",
+                selected_scheme
             )
 
 
@@ -1452,6 +1497,11 @@ if ask_button:
 
 
         except Exception as error:
+
+            logger.exception(
+                "RAG question processing failed | scheme=%s",
+                selected_scheme
+            )
 
             st.error(
                 f"Unable to process your question: {error}"
