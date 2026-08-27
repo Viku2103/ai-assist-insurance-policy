@@ -202,7 +202,7 @@ def create_government_user(
 
     except Exception as error:
 
-        print("SUPABASE REGISTRATION ERROR:", error)
+        
 
         error_text = str(error).lower()
 
@@ -218,10 +218,9 @@ def create_government_user(
             )
 
         return (
-            False,
-            f"Supabase error: {type(error).__name__}: {error}"
-        )
-
+             False,
+            "Unable to create account. Please try again."
+            )
 
 def validate_government_user(
     employee_id,
