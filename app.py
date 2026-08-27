@@ -201,7 +201,9 @@ def create_government_user(
         )
 
     except Exception as error:
+
         print("SUPABASE REGISTRATION ERROR:", error)
+
         error_text = str(error).lower()
 
         if (
@@ -217,8 +219,7 @@ def create_government_user(
 
         return (
             False,
-            "Unable to create account. "
-            "Please try again."
+            f"Supabase error: {type(error).__name__}: {error}"
         )
 
 
@@ -1468,4 +1469,4 @@ st.html(
         🛡️ AI Assist • Retrieval-Augmented Generation for Insurance Policy Understanding
     </div>
     """
-)   
+)
