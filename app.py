@@ -809,7 +809,8 @@ def get_cached_retriever(scheme):
 
 
 # ==================================================
-# LOGIN PAGE
+# LOGIN PAGE - POLISHED RESPONSIVE LANDING UI
+# Authentication logic is unchanged
 # ==================================================
 
 if not st.session_state.logged_in:
@@ -817,216 +818,503 @@ if not st.session_state.logged_in:
     st.markdown(
         """
         <style>
+        /* --------------------------------------------------
+           REMOVE STREAMLIT CHROME / DEPLOY UI
+        -------------------------------------------------- */
+        #MainMenu,
+        footer,
+        header[data-testid="stHeader"],
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"],
+        .stAppDeployButton,
+        button[kind="header"] {
+            display: none !important;
+            visibility: hidden !important;
+        }
 
         html,
         body,
         [data-testid="stAppViewContainer"],
         .stApp {
-            background: #ffffff !important;
+            background:
+                radial-gradient(circle at 10% 10%, rgba(44, 124, 255, 0.10), transparent 28%),
+                radial-gradient(circle at 92% 8%, rgba(128, 75, 255, 0.10), transparent 26%),
+                linear-gradient(180deg, #f7fbff 0%, #ffffff 54%, #f7faff 100%)
+                !important;
+            color: #183153 !important;
         }
 
         [data-testid="stSidebar"] {
             display: none !important;
         }
 
-        #MainMenu {
-            visibility: hidden;
-        }
-
-        footer {
-            visibility: hidden;
-        }
-
         .block-container {
-            width: 96% !important;
-            max-width: 1320px !important;
+            width: min(96vw, 1460px) !important;
+            max-width: 1460px !important;
             margin: 0 auto !important;
-            padding-top: 1.5rem !important;
-            padding-bottom: 1rem !important;
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
+            padding-top: clamp(0.8rem, 1.5vw, 1.35rem) !important;
+            padding-bottom: 1.5rem !important;
+            padding-left: clamp(0.7rem, 1.5vw, 1.2rem) !important;
+            padding-right: clamp(0.7rem, 1.5vw, 1.2rem) !important;
+        }
+
+        /* --------------------------------------------------
+           TOP BRAND BAR
+        -------------------------------------------------- */
+        .landing-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 14px 18px;
+            margin-bottom: 14px;
+            border: 1px solid #dfe9f6;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.86);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 30px rgba(41, 78, 125, 0.06);
+        }
+
+        .landing-brand-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .landing-logo {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            color: white;
+            font-size: 24px;
+            background: linear-gradient(135deg, #1688ee, #5e55ef);
+            box-shadow: 0 8px 18px rgba(55, 94, 224, 0.22);
+            flex: 0 0 auto;
+        }
+
+        .landing-brand-title {
+            color: #163762;
+            font-size: clamp(21px, 2vw, 28px);
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -0.6px;
+        }
+
+        .landing-brand-sub {
+            margin-top: 3px;
+            color: #72839a;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .landing-trust {
+            color: #44627f;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 8px 12px;
+            border: 1px solid #dce8f5;
+            border-radius: 999px;
+            background: #f7fbff;
+            white-space: nowrap;
+        }
+
+        /* --------------------------------------------------
+           SHARED HERO CARD
+        -------------------------------------------------- */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            border: 1px solid #dce7f5 !important;
+            border-radius: 26px !important;
+            background: rgba(255,255,255,0.96) !important;
+            box-shadow: 0 18px 48px rgba(39, 74, 122, 0.10) !important;
+            overflow: hidden !important;
+        }
+
+        [data-testid="stVerticalBlockBorderWrapper"] > div {
+            padding: clamp(14px, 1.8vw, 22px) !important;
+        }
+
+        /* --------------------------------------------------
+           LEFT MARKETING PANEL
+        -------------------------------------------------- */
+        .hero-kicker-login {
+            display: inline-block;
+            padding: 7px 12px;
+            margin-bottom: 10px;
+            border-radius: 999px;
+            color: #0e76cc;
+            background: #eaf6ff;
+            border: 1px solid #d3ebff;
+            font-size: 10.5px;
+            font-weight: 900;
+            letter-spacing: 0.65px;
+        }
+
+        .hero-title-login {
+            color: #142f56 !important;
+            font-size: clamp(32px, 3.4vw, 50px);
+            line-height: 1.02;
+            font-weight: 950;
+            letter-spacing: -1.6px;
+            margin-bottom: 10px;
+        }
+
+        .hero-title-login span {
+            background: linear-gradient(90deg, #1288ea, #7757ea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-copy-login {
+            color: #60738e !important;
+            font-size: clamp(13px, 1.15vw, 15.5px);
+            line-height: 1.65;
+            max-width: 660px;
+            margin-bottom: 14px;
         }
 
         [data-testid="stImage"] {
+            width: 100%;
             display: flex;
-            justify-content: center;
             align-items: center;
-            padding-top: 10px;
+            justify-content: center;
+            margin-top: 2px;
+            margin-bottom: 8px;
         }
 
         [data-testid="stImage"] img {
             width: 100% !important;
-            height: auto !important;
-            max-height: 470px !important;
+            height: clamp(260px, 30vw, 430px) !important;
+            max-height: 430px !important;
             object-fit: contain !important;
-            border-radius: 18px !important;
-
-            box-shadow:
-                0 12px 35px
-                rgba(25,70,120,0.10);
+            object-position: center !important;
+            background: linear-gradient(145deg, #061b43, #0a2e68) !important;
+            border-radius: 20px !important;
+            border: 1px solid rgba(198, 218, 242, 0.95);
+            box-shadow: 0 14px 34px rgba(28, 70, 130, 0.13);
         }
 
-        .login-brand {
-            display: inline-block;
-            padding: 7px 14px;
-            border-radius: 999px;
+        .benefit-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0,1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
 
-            background: #eaf5ff;
-            border: 1px solid #d3eaff;
+        .benefit-chip {
+            min-height: 66px;
+            padding: 10px 11px;
+            border-radius: 13px;
+            background: linear-gradient(145deg, #fbfdff, #f2f7ff);
+            border: 1px solid #dfe9f5;
+        }
 
-            color: #0878d1;
+        .benefit-chip strong {
+            display: block;
+            color: #24476f;
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
 
+        .benefit-chip span {
+            display: block;
+            color: #72839a;
+            font-size: 10.8px;
+            line-height: 1.35;
+        }
+
+        /* --------------------------------------------------
+           RIGHT ACCESS PANEL
+        -------------------------------------------------- */
+        .access-kicker {
+            color: #62748c;
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.5px;
-
-            margin-bottom: 13px;
-        }
-
-        .login-title {
-            color: #142b4d !important;
-            font-size: clamp(28px, 3vw, 34px);
-            font-weight: 800;
-            line-height: 1.1;
             margin-bottom: 6px;
         }
 
-        .login-subtitle {
-            color: #687b94 !important;
-            font-size: 14px;
+        .access-title {
+            color: #17365f !important;
+            font-size: clamp(26px, 2.4vw, 36px);
+            font-weight: 900;
+            line-height: 1.08;
+            letter-spacing: -0.8px;
+            margin-bottom: 7px;
+        }
+
+        .access-copy {
+            color: #75869c !important;
+            font-size: 13px;
             line-height: 1.55;
-            max-width: 430px;
-            margin-bottom: 11px;
+            margin-bottom: 10px;
         }
 
-        [data-testid="stTextInput"] label,
-        [data-testid="stTextInput"] label p {
-            color: #263a56 !important;
-            font-size: 13px !important;
-            font-weight: 650 !important;
-        }
-
-        .stTextInput input {
-            min-height: 46px !important;
-            border-radius: 10px !important;
-
-            background: #ffffff !important;
-            color: #1c304d !important;
-
-            border:
-                1px solid #d4deea !important;
-
-            font-size: 14px !important;
-        }
-
-        .stTextInput input::placeholder {
-            color: #97a6b8 !important;
-        }
-
-        .stButton > button {
-            min-height: 46px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 700;
-        }
-
-        .stButton > button[kind="primary"] {
-            background:
-                linear-gradient(
-                    90deg,
-                    #078be8,
-                    #315ce8
-                ) !important;
-
-            color: white !important;
-            border: none !important;
-        }
-
-        .demo-login {
-            margin-top: 9px;
-            padding: 9px;
-
-            border-radius: 9px;
-
-            background: #f3f8ff;
-            border: 1px solid #e0ecfb;
-
-            color: #77879b !important;
-            text-align: center;
-            font-size: 11px;
-        }
-
-        .demo-login strong {
-            color: #0878d1 !important;
-        }
-
-        .login-security {
-            margin-top: 9px;
-            padding: 9px;
-
-            border-radius: 9px;
-
-            background: #f8fafc;
-            border: 1px solid #e3e9f0;
-
-            color: #77879b !important;
-            text-align: center;
-            font-size: 11px;
-        }
-
-        .login-security strong {
-            color: #334c6c !important;
-        }
-
-
-        /* ---------- Responsive login ---------- */
         div[data-baseweb="tab-list"] {
             width: 100% !important;
-            display: flex !important;
-            gap: 2px !important;
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 3px !important;
+            padding: 4px !important;
+            border: 1px solid #e2eaf4;
+            border-radius: 13px;
+            background: #f7faff;
         }
 
         button[data-baseweb="tab"] {
-            flex: 1 1 0 !important;
             min-width: 0 !important;
-            padding-left: 4px !important;
-            padding-right: 4px !important;
+            padding: 8px 5px !important;
+            border-radius: 9px !important;
+        }
+
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background: #ffffff !important;
+            box-shadow: 0 3px 10px rgba(43, 75, 118, 0.08);
         }
 
         button[data-baseweb="tab"] p {
             white-space: normal !important;
+            overflow-wrap: anywhere !important;
             text-align: center !important;
-            line-height: 1.2 !important;
-            font-size: clamp(11px, 1vw, 14px) !important;
+            line-height: 1.15 !important;
+            font-size: clamp(9.6px, 0.9vw, 12px) !important;
+            font-weight: 750 !important;
         }
 
-        @media (max-width: 900px) {
+        [data-testid="stTextInput"] label p {
+            color: #29415f !important;
+            font-size: 12px !important;
+            font-weight: 750 !important;
+        }
+
+        .stTextInput input {
+            min-height: 43px !important;
+            border-radius: 10px !important;
+            border: 1px solid #d7e2ee !important;
+            background: #ffffff !important;
+            color: #1b304d !important;
+            font-size: 13.5px !important;
+        }
+
+        .stTextInput input:focus {
+            border-color: #4c80e8 !important;
+            box-shadow: 0 0 0 3px rgba(76, 128, 232, 0.08) !important;
+        }
+
+        .stButton > button {
+            min-height: 44px !important;
+            border-radius: 10px !important;
+            font-size: 13.5px !important;
+            font-weight: 800 !important;
+            transition: transform 0.16s ease, box-shadow 0.16s ease !important;
+        }
+
+        .stButton > button:hover {
+            transform: translateY(-1px);
+        }
+
+        .stButton > button[kind="primary"] {
+            color: #ffffff !important;
+            border: none !important;
+            background: linear-gradient(90deg, #0f8de8, #345ce6, #744be8) !important;
+            box-shadow: 0 9px 20px rgba(55, 85, 224, 0.20) !important;
+        }
+
+        [data-testid="stAlert"] {
+            border-radius: 11px !important;
+            font-size: 12px !important;
+        }
+
+        details {
+            border: 1px solid #dee7f2 !important;
+            border-radius: 11px !important;
+            background: #fbfdff !important;
+        }
+
+        .login-security {
+            margin-top: 10px;
+            padding: 9px 10px;
+            border: 1px solid #e0e8f2;
+            border-radius: 11px;
+            background: linear-gradient(90deg, #f8fbff, #fbf9ff);
+            color: #6d7f94 !important;
+            text-align: center;
+            font-size: 10.5px;
+            font-weight: 650;
+        }
+
+        .login-security strong {
+            color: #315175 !important;
+        }
+
+        /* --------------------------------------------------
+           REAL FEATURE CARDS
+        -------------------------------------------------- */
+        .why-title {
+            margin: 18px 0 4px;
+            text-align: center;
+            color: #18375f;
+            font-size: clamp(22px, 2.2vw, 31px);
+            font-weight: 900;
+            letter-spacing: -0.7px;
+        }
+
+        .why-sub {
+            margin-bottom: 13px;
+            text-align: center;
+            color: #78899d;
+            font-size: 12.5px;
+        }
+
+        .feature-grid-login {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0,1fr));
+            gap: 12px;
+        }
+
+        .feature-login {
+            min-height: 132px;
+            padding: 15px;
+            border-radius: 16px;
+            border: 1px solid #dee8f5;
+            background: #ffffff;
+            box-shadow: 0 7px 22px rgba(41, 78, 125, 0.05);
+        }
+
+        .feature-login:nth-child(1) {
+            background: linear-gradient(145deg,#ffffff,#f7f2ff);
+        }
+
+        .feature-login:nth-child(2) {
+            background: linear-gradient(145deg,#ffffff,#f1fff5);
+        }
+
+        .feature-login:nth-child(3) {
+            background: linear-gradient(145deg,#ffffff,#f1f7ff);
+        }
+
+        .feature-login:nth-child(4) {
+            background: linear-gradient(145deg,#ffffff,#fff8f0);
+        }
+
+        .feature-login-icon {
+            font-size: 23px;
+            margin-bottom: 8px;
+        }
+
+        .feature-login-title {
+            color: #24466e;
+            font-size: 13.5px;
+            font-weight: 850;
+            margin-bottom: 5px;
+        }
+
+        .feature-login-copy {
+            color: #74859a;
+            font-size: 11.5px;
+            line-height: 1.5;
+        }
+
+        .landing-footer {
+            margin-top: 14px;
+            padding: 13px 16px;
+            border-radius: 15px;
+            border: 1px solid #dfe8f3;
+            background: linear-gradient(90deg,#f7fbff,#fbf9ff);
+            color: #657990;
+            text-align: center;
+            font-size: 11.5px;
+            line-height: 1.6;
+        }
+
+        .landing-footer strong {
+            color: #274b73;
+        }
+
+        /* --------------------------------------------------
+           RESPONSIVE
+        -------------------------------------------------- */
+        @media (max-width: 1050px) {
+            .landing-trust {
+                display: none;
+            }
+
+            .benefit-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .feature-grid-login {
+                grid-template-columns: repeat(2, minmax(0,1fr));
+            }
+
             [data-testid="stImage"] img {
-                max-height: 340px !important;
-            }
-
-            .login-title {
-                font-size: 28px !important;
-            }
-
-            .login-subtitle {
-                font-size: 13px !important;
+                height: clamp(240px, 37vw, 350px) !important;
             }
         }
 
-        @media (max-width: 650px) {
+        @media (max-width: 760px) {
             .block-container {
-                width: 98% !important;
-                padding-left: 0.6rem !important;
-                padding-right: 0.6rem !important;
+                width: 98vw !important;
+                padding-left: 0.45rem !important;
+                padding-right: 0.45rem !important;
+            }
+
+            .landing-topbar {
+                border-radius: 14px;
+                padding: 11px 12px;
+            }
+
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                border-radius: 18px !important;
+            }
+
+            .hero-title-login {
+                font-size: 34px;
+            }
+
+            .benefit-grid {
+                grid-template-columns: repeat(3, minmax(0,1fr));
+            }
+
+            div[data-baseweb="tab-list"] {
+                grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+            }
+
+            .feature-grid-login {
+                grid-template-columns: 1fr;
             }
 
             [data-testid="stImage"] img {
-                max-height: 240px !important;
+                height: auto !important;
+                max-height: 330px !important;
+                object-fit: cover !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .landing-logo {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
             }
 
-            button[data-baseweb="tab"] p {
-                font-size: 10.5px !important;
+            .landing-brand-title {
+                font-size: 21px;
+            }
+
+            .landing-brand-sub {
+                font-size: 10.5px;
+            }
+
+            .benefit-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-title-login {
+                font-size: 30px;
             }
         }
         </style>
@@ -1034,486 +1322,576 @@ if not st.session_state.logged_in:
         unsafe_allow_html=True
     )
 
-
-    image_col, login_col = st.columns(
-        [1.0, 1.0],
-        gap="large"
+    st.markdown(
+        """
+        <div class="landing-topbar">
+            <div class="landing-brand-wrap">
+                <div class="landing-logo">🛡️</div>
+                <div>
+                    <div class="landing-brand-title">AI Assist</div>
+                    <div class="landing-brand-sub">
+                        Insurance Policy Information System
+                    </div>
+                </div>
+            </div>
+            <div class="landing-trust">
+                🔐 Secure Access &nbsp; • &nbsp; 📄 Source Grounded
+                &nbsp; • &nbsp; 🤖 RAG Powered
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
+    with st.container(border=True):
 
-    # ----------------------------------------------
-    # LEFT IMAGE
-    # ----------------------------------------------
-
-    with image_col:
-
-        if os.path.exists(LOGIN_IMAGE_PATH):
-
-            st.image(
-                LOGIN_IMAGE_PATH,
-                use_container_width=True
-            )
-
-        else:
-
-            st.error(
-                "Image not found: assets/ai_assist_login.png"
-            )
-
-
-    # ----------------------------------------------
-    # RIGHT ACCESS PANEL
-    # ----------------------------------------------
-
-    with login_col:
-
-        st.markdown(
-            "<div style='height:8px'></div>",
-            unsafe_allow_html=True
+        image_col, login_col = st.columns(
+            [1.08, 0.92],
+            gap="large"
         )
 
-        st.markdown(
-            """
-            <div class="login-brand">
-                🛡️ AI-POWERED INSURANCE INTELLIGENCE
-            </div>
+        # ----------------------------------------------
+        # LEFT MARKETING PANEL
+        # ----------------------------------------------
 
-            <div class="login-title">
-                Welcome to AI Assist
-            </div>
+        with image_col:
 
-            <div class="login-subtitle">
-                Public users can explore synthetic insurance
-                information directly. Government employees use
-                approved accounts for government scheme access.
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+            st.markdown(
+                """
+                <div class="hero-kicker-login">
+                    AI-POWERED INSURANCE INTELLIGENCE
+                </div>
 
-        (
-            public_tab,
-            govt_login_tab,
-            govt_signup_tab,
-            forgot_password_tab
-        ) = st.tabs(
-            [
-                "🌐 Public",
-                "🏛️ Government Login",
-                "📝 Register",
-                "🔑 Forgot Password"
-            ]
-        )
+                <div class="hero-title-login">
+                    Understand insurance.<br>
+                    <span>Find answers faster.</span>
+                </div>
 
-
-        # ==========================================
-        # PUBLIC ACCESS
-        # ==========================================
-
-        with public_tab:
-
-            st.caption(
-                "Public access is limited to the "
-                "Synthetic Insurance knowledge base."
+                <div class="hero-copy-login">
+                    Ask natural-language questions and receive
+                    clear answers grounded in the insurance
+                    documents available to AI Assist.
+                </div>
+                """,
+                unsafe_allow_html=True
             )
 
-            if st.button(
-                "🌐 Continue as Public User",
-                type="primary",
-                use_container_width=True,
-                key="public_access_button"
-            ):
+            if os.path.exists(LOGIN_IMAGE_PATH):
 
-                st.session_state.logged_in = True
-                st.session_state.user_role = "public"
-                st.session_state.username = "public"
-                st.session_state.user_profile = None
-
-                logger.info(
-                    "Public user access started"
+                st.image(
+                    LOGIN_IMAGE_PATH,
+                    use_container_width=True
                 )
 
-                st.rerun()
+            else:
 
-
-        # ==========================================
-        # GOVERNMENT LOGIN
-        # ==========================================
-
-        with govt_login_tab:
-
-            employee_id_login = st.text_input(
-                "Government Employee ID",
-                placeholder="Enter your Employee ID",
-                key="govt_login_employee_id"
-            )
-
-            govt_login_password = st.text_input(
-                "Password",
-                type="password",
-                placeholder="Enter your password",
-                key="govt_login_password"
-            )
-
-            govt_login_button = st.button(
-                "🏛️ Sign In",
-                type="primary",
-                use_container_width=True,
-                key="government_signin_button"
-            )
-
-            if govt_login_button:
-
-                government_user, message = (
-                    validate_government_user(
-                        employee_id_login,
-                        govt_login_password
-                    )
+                st.error(
+                    "Image not found: assets/ai_assist_login.png"
                 )
 
-                if government_user:
-
-                    st.session_state.logged_in = True
-                    st.session_state.user_role = "government"
-                    st.session_state.username = (
-                        government_user[
-                            "employee_id"
-                        ]
-                    )
-                    st.session_state.user_profile = (
-                        government_user
-                    )
-
-                    logger.info(
-                        "Government employee login successful"
-                    )
-
-                    st.rerun()
-
-                else:
-
-                    st.error(message)
-
-
-        # ==========================================
-        # GOVERNMENT ACCOUNT REGISTRATION
-        # ==========================================
-
-        with govt_signup_tab:
-
-            st.caption(
-                "New government accounts require administrator "
-                "approval before government scheme access."
+            st.html(
+                """
+                <div class="benefit-grid">
+                    <div class="benefit-chip">
+                        <strong>🔎 Intelligent Retrieval</strong>
+                        <span>Searches semantically relevant policy content.</span>
+                    </div>
+                    <div class="benefit-chip">
+                        <strong>📄 Source Grounding</strong>
+                        <span>Shows supporting document and page references.</span>
+                    </div>
+                    <div class="benefit-chip">
+                        <strong>🔐 Controlled Access</strong>
+                        <span>Separate public, employee and admin access.</span>
+                    </div>
+                </div>
+                """
             )
 
-            govt_employee_id = st.text_input(
-                "Government Employee ID",
-                placeholder="Enter your Employee ID",
-                key="govt_employee_id"
+        # ----------------------------------------------
+        # RIGHT ACCESS PANEL
+        # ----------------------------------------------
+
+        with login_col:
+
+            st.markdown(
+                """
+                <div class="access-kicker">ACCESS PORTAL</div>
+                <div class="access-title">Welcome to AI Assist</div>
+                <div class="access-copy">
+                    Public users can explore synthetic insurance
+                    information directly. Approved government
+                    employees can access government scheme content.
+                </div>
+                """,
+                unsafe_allow_html=True
             )
 
-            govt_username = st.text_input(
-                "Employee Name",
-                placeholder="Enter employee name",
-                key="govt_signup_username"
+            (
+                public_tab,
+                govt_login_tab,
+                govt_signup_tab,
+                forgot_password_tab
+            ) = st.tabs(
+                [
+                    "🌐 Public",
+                    "🏛️ Government Login",
+                    "📝 Register",
+                    "🔑 Forgot Password"
+                ]
             )
 
-            govt_email = st.text_input(
-                "Official / Registered Email",
-                placeholder="name@example.com",
-                key="govt_signup_email"
-            )
+            # ==========================================
+            # PUBLIC ACCESS
+            # ==========================================
 
-            govt_department = st.text_input(
-                "Department / Office",
-                placeholder="Example: Health Department",
-                key="govt_department"
-            )
+            with public_tab:
 
-            govt_password = st.text_input(
-                "Create Password",
-                type="password",
-                placeholder="Create a password",
-                key="govt_signup_password"
-            )
+                st.info(
+                    "🌐 Public access is limited to the "
+                    "Synthetic Insurance knowledge base."
+                )
 
-            govt_confirm_password = st.text_input(
-                "Confirm Password",
-                type="password",
-                placeholder="Re-enter password",
-                key="govt_signup_confirm_password"
-            )
-
-            create_account_button = st.button(
-                "📝 Submit Registration",
-                use_container_width=True,
-                key="create_government_account"
-            )
-
-            if create_account_button:
-
-                if not all(
-                    [
-                        govt_employee_id.strip(),
-                        govt_username.strip(),
-                        govt_email.strip(),
-                        govt_department.strip(),
-                        govt_password
-                    ]
-                ):
-
-                    logger.warning(
-                        "Government registration validation "
-                        "failed: Missing fields"
-                    )
-
-                    st.warning(
-                        "Please complete all account fields."
-                    )
-
-                elif (
-                    "@" not in govt_email
-                    or "." not in govt_email
-                ):
-
-                    st.warning(
-                        "Please enter a valid email address."
-                    )
-
-                elif (
-                    govt_password
-                    != govt_confirm_password
-                ):
-
-                    logger.warning(
-                        "Government registration validation "
-                        "failed: Password mismatch"
-                    )
-
-                    st.warning(
-                        "Passwords do not match."
-                    )
-
-                elif len(govt_password) < 8:
-
-                    st.warning(
-                        "Password must contain at least "
-                        "8 characters."
-                    )
-
-                else:
-
-                    success, message = (
-                        create_government_user(
-                            govt_username,
-                            govt_email,
-                            govt_password,
-                            govt_employee_id,
-                            govt_department
-                        )
-                    )
-
-                    if success:
-
-                        st.success(message)
-
-                    else:
-
-                        st.error(message)
-
-
-        # ==========================================
-        # FORGOT PASSWORD
-        # ==========================================
-
-        with forgot_password_tab:
-
-            st.caption(
-                "Password recovery is available for "
-                "email-linked Supabase Auth accounts."
-            )
-
-            recovery_email = st.text_input(
-                "Registered Email",
-                placeholder="name@example.com",
-                key="password_recovery_email"
-            )
-
-            if st.button(
-                "📧 Send Recovery Code",
-                use_container_width=True,
-                key="send_recovery_code"
-            ):
-
-                if not recovery_email.strip():
-
-                    st.warning(
-                        "Please enter your registered email."
-                    )
-
-                else:
-
-                    success, message = (
-                        send_password_reset_code(
-                            recovery_email
-                        )
-                    )
-
-                    if success:
-                        st.success(message)
-                    else:
-                        st.error(message)
-
-            st.divider()
-
-            st.caption(
-                "After receiving the recovery code, "
-                "enter it below with your new password."
-            )
-
-            recovery_email_confirm = st.text_input(
-                "Email for Verification",
-                placeholder="name@example.com",
-                key="password_reset_email_confirm"
-            )
-
-            recovery_code = st.text_input(
-                "Recovery Code",
-                placeholder="Enter the code received by email",
-                key="password_recovery_code"
-            )
-
-            new_password = st.text_input(
-                "New Password",
-                type="password",
-                key="new_recovery_password"
-            )
-
-            confirm_new_password = st.text_input(
-                "Confirm New Password",
-                type="password",
-                key="confirm_new_recovery_password"
-            )
-
-            if st.button(
-                "🔑 Update Password",
-                type="primary",
-                use_container_width=True,
-                key="complete_password_reset"
-            ):
-
-                if not all(
-                    [
-                        recovery_email_confirm.strip(),
-                        recovery_code.strip(),
-                        new_password
-                    ]
-                ):
-
-                    st.warning(
-                        "Please complete all password reset fields."
-                    )
-
-                elif (
-                    new_password
-                    != confirm_new_password
-                ):
-
-                    st.warning(
-                        "Passwords do not match."
-                    )
-
-                elif len(new_password) < 8:
-
-                    st.warning(
-                        "Password must contain at least "
-                        "8 characters."
-                    )
-
-                else:
-
-                    success, message = (
-                        complete_password_reset(
-                            recovery_email_confirm,
-                            recovery_code,
-                            new_password
-                        )
-                    )
-
-                    if success:
-                        st.success(message)
-                    else:
-                        st.error(message)
-
-
-        # ==========================================
-        # ADMIN LOGIN
-        # ==========================================
-
-        with st.expander(
-            "🛡️ Administrator Access",
-            expanded=False
-        ):
-
-            admin_username = st.text_input(
-                "Administrator Username",
-                key="admin_login_username"
-            )
-
-            admin_password = st.text_input(
-                "Administrator Password",
-                type="password",
-                key="admin_login_password"
-            )
-
-            if st.button(
-                "🛡️ Administrator Sign In",
-                use_container_width=True,
-                key="admin_signin_button"
-            ):
-
-                if validate_admin(
-                    admin_username,
-                    admin_password
+                if st.button(
+                    "🌐 Continue as Public User",
+                    type="primary",
+                    use_container_width=True,
+                    key="public_access_button"
                 ):
 
                     st.session_state.logged_in = True
-                    st.session_state.user_role = "admin"
-                    st.session_state.username = (
-                        ADMIN_USERNAME
-                    )
+                    st.session_state.user_role = "public"
+                    st.session_state.username = "public"
                     st.session_state.user_profile = None
 
                     logger.info(
-                        "Administrator login successful"
+                        "Public user access started"
                     )
 
                     st.rerun()
 
-                else:
+            # ==========================================
+            # GOVERNMENT LOGIN
+            # ==========================================
 
-                    logger.warning(
-                        "Administrator login failed"
+            with govt_login_tab:
+
+                employee_id_login = st.text_input(
+                    "Government Employee ID",
+                    placeholder="Enter your Employee ID",
+                    key="govt_login_employee_id"
+                )
+
+                govt_login_password = st.text_input(
+                    "Password",
+                    type="password",
+                    placeholder="Enter your password",
+                    key="govt_login_password"
+                )
+
+                govt_login_button = st.button(
+                    "🏛️ Sign In",
+                    type="primary",
+                    use_container_width=True,
+                    key="government_signin_button"
+                )
+
+                if govt_login_button:
+
+                    government_user, message = (
+                        validate_government_user(
+                            employee_id_login,
+                            govt_login_password
+                        )
                     )
 
-                    st.error(
-                        "Invalid administrator credentials."
-                    )
+                    if government_user:
 
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "government"
+                        st.session_state.username = (
+                            government_user[
+                                "employee_id"
+                            ]
+                        )
+                        st.session_state.user_profile = (
+                            government_user
+                        )
 
-        st.markdown(
-            """
-            <div class="login-security">
-                🔒 <strong>Secure Access</strong>
-                &nbsp; • &nbsp;
-                👤 <strong>Admin Approval</strong>
-                &nbsp; • &nbsp;
-                🤖 <strong>AI Powered</strong>
+                        logger.info(
+                            "Government employee login successful"
+                        )
+
+                        st.rerun()
+
+                    else:
+
+                        st.error(message)
+
+            # ==========================================
+            # GOVERNMENT ACCOUNT REGISTRATION
+            # ==========================================
+
+            with govt_signup_tab:
+
+                st.caption(
+                    "New government accounts require administrator "
+                    "approval before government scheme access."
+                )
+
+                govt_employee_id = st.text_input(
+                    "Government Employee ID",
+                    placeholder="Enter your Employee ID",
+                    key="govt_employee_id"
+                )
+
+                govt_username = st.text_input(
+                    "Employee Name",
+                    placeholder="Enter employee name",
+                    key="govt_signup_username"
+                )
+
+                govt_email = st.text_input(
+                    "Official / Registered Email",
+                    placeholder="name@example.com",
+                    key="govt_signup_email"
+                )
+
+                govt_department = st.text_input(
+                    "Department / Office",
+                    placeholder="Example: Health Department",
+                    key="govt_department"
+                )
+
+                govt_password = st.text_input(
+                    "Create Password",
+                    type="password",
+                    placeholder="Create a password",
+                    key="govt_signup_password"
+                )
+
+                govt_confirm_password = st.text_input(
+                    "Confirm Password",
+                    type="password",
+                    placeholder="Re-enter password",
+                    key="govt_signup_confirm_password"
+                )
+
+                create_account_button = st.button(
+                    "📝 Submit Registration",
+                    use_container_width=True,
+                    key="create_government_account"
+                )
+
+                if create_account_button:
+
+                    if not all(
+                        [
+                            govt_employee_id.strip(),
+                            govt_username.strip(),
+                            govt_email.strip(),
+                            govt_department.strip(),
+                            govt_password
+                        ]
+                    ):
+
+                        logger.warning(
+                            "Government registration validation "
+                            "failed: Missing fields"
+                        )
+
+                        st.warning(
+                            "Please complete all account fields."
+                        )
+
+                    elif (
+                        "@" not in govt_email
+                        or "." not in govt_email
+                    ):
+
+                        st.warning(
+                            "Please enter a valid email address."
+                        )
+
+                    elif (
+                        govt_password
+                        != govt_confirm_password
+                    ):
+
+                        logger.warning(
+                            "Government registration validation "
+                            "failed: Password mismatch"
+                        )
+
+                        st.warning(
+                            "Passwords do not match."
+                        )
+
+                    elif len(govt_password) < 8:
+
+                        st.warning(
+                            "Password must contain at least "
+                            "8 characters."
+                        )
+
+                    else:
+
+                        success, message = (
+                            create_government_user(
+                                govt_username,
+                                govt_email,
+                                govt_password,
+                                govt_employee_id,
+                                govt_department
+                            )
+                        )
+
+                        if success:
+
+                            st.success(message)
+
+                        else:
+
+                            st.error(message)
+
+            # ==========================================
+            # FORGOT PASSWORD
+            # ==========================================
+
+            with forgot_password_tab:
+
+                st.caption(
+                    "Password recovery is available for "
+                    "email-linked Supabase Auth accounts."
+                )
+
+                recovery_email = st.text_input(
+                    "Registered Email",
+                    placeholder="name@example.com",
+                    key="password_recovery_email"
+                )
+
+                if st.button(
+                    "📧 Send Recovery Code",
+                    use_container_width=True,
+                    key="send_recovery_code"
+                ):
+
+                    if not recovery_email.strip():
+
+                        st.warning(
+                            "Please enter your registered email."
+                        )
+
+                    else:
+
+                        success, message = (
+                            send_password_reset_code(
+                                recovery_email
+                            )
+                        )
+
+                        if success:
+                            st.success(message)
+                        else:
+                            st.error(message)
+
+                st.divider()
+
+                st.caption(
+                    "After receiving the recovery code, "
+                    "enter it below with your new password."
+                )
+
+                recovery_email_confirm = st.text_input(
+                    "Email for Verification",
+                    placeholder="name@example.com",
+                    key="password_reset_email_confirm"
+                )
+
+                recovery_code = st.text_input(
+                    "Recovery Code",
+                    placeholder="Enter the code received by email",
+                    key="password_recovery_code"
+                )
+
+                new_password = st.text_input(
+                    "New Password",
+                    type="password",
+                    key="new_recovery_password"
+                )
+
+                confirm_new_password = st.text_input(
+                    "Confirm New Password",
+                    type="password",
+                    key="confirm_new_recovery_password"
+                )
+
+                if st.button(
+                    "🔑 Update Password",
+                    type="primary",
+                    use_container_width=True,
+                    key="complete_password_reset"
+                ):
+
+                    if not all(
+                        [
+                            recovery_email_confirm.strip(),
+                            recovery_code.strip(),
+                            new_password
+                        ]
+                    ):
+
+                        st.warning(
+                            "Please complete all password reset fields."
+                        )
+
+                    elif (
+                        new_password
+                        != confirm_new_password
+                    ):
+
+                        st.warning(
+                            "Passwords do not match."
+                        )
+
+                    elif len(new_password) < 8:
+
+                        st.warning(
+                            "Password must contain at least "
+                            "8 characters."
+                        )
+
+                    else:
+
+                        success, message = (
+                            complete_password_reset(
+                                recovery_email_confirm,
+                                recovery_code,
+                                new_password
+                            )
+                        )
+
+                        if success:
+                            st.success(message)
+                        else:
+                            st.error(message)
+
+            # ==========================================
+            # ADMIN LOGIN
+            # ==========================================
+
+            with st.expander(
+                "🛡️ Administrator Access",
+                expanded=False
+            ):
+
+                admin_username = st.text_input(
+                    "Administrator Username",
+                    key="admin_login_username"
+                )
+
+                admin_password = st.text_input(
+                    "Administrator Password",
+                    type="password",
+                    key="admin_login_password"
+                )
+
+                if st.button(
+                    "🛡️ Administrator Sign In",
+                    use_container_width=True,
+                    key="admin_signin_button"
+                ):
+
+                    if validate_admin(
+                        admin_username,
+                        admin_password
+                    ):
+
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "admin"
+                        st.session_state.username = (
+                            ADMIN_USERNAME
+                        )
+                        st.session_state.user_profile = None
+
+                        logger.info(
+                            "Administrator login successful"
+                        )
+
+                        st.rerun()
+
+                    else:
+
+                        logger.warning(
+                            "Administrator login failed"
+                        )
+
+                        st.error(
+                            "Invalid administrator credentials."
+                        )
+
+            st.markdown(
+                """
+                <div class="login-security">
+                    🔒 <strong>Secure Access</strong>
+                    &nbsp; • &nbsp;
+                    👤 <strong>Admin Approval</strong>
+                    &nbsp; • &nbsp;
+                    📄 <strong>Source Grounded</strong>
+                    &nbsp; • &nbsp;
+                    🤖 <strong>AI Powered</strong>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    st.html(
+        """
+        <div class="why-title">Why Choose AI Assist?</div>
+        <div class="why-sub">Real features implemented in this project</div>
+
+        <div class="feature-grid-login">
+            <div class="feature-login">
+                <div class="feature-login-icon">🧠</div>
+                <div class="feature-login-title">RAG-Based Intelligence</div>
+                <div class="feature-login-copy">
+                    Combines semantic retrieval with Gemini to answer
+                    questions using retrieved policy context.
+                </div>
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+            <div class="feature-login">
+                <div class="feature-login-icon">📄</div>
+                <div class="feature-login-title">Source Grounding</div>
+                <div class="feature-login-copy">
+                    Presents supporting policy document names and page
+                    references with generated answers.
+                </div>
+            </div>
+            <div class="feature-login">
+                <div class="feature-login-icon">🔐</div>
+                <div class="feature-login-title">Controlled Access</div>
+                <div class="feature-login-copy">
+                    Supports public users, approved government employees,
+                    administrator approval and account controls.
+                </div>
+            </div>
+            <div class="feature-login">
+                <div class="feature-login-icon">🔑</div>
+                <div class="feature-login-title">Account Recovery</div>
+                <div class="feature-login-copy">
+                    Email-linked Supabase Auth accounts support secure
+                    password recovery and reset.
+                </div>
+            </div>
+        </div>
 
+        <div class="landing-footer">
+            <strong>🛡️ AI Assist</strong> • RAG-Based Insurance Policy Information System<br>
+            Python • LangChain • HuggingFace • ChromaDB • Gemini • Streamlit • Supabase
+        </div>
+        """
+    )
 
     st.stop()
 
@@ -1527,15 +1905,18 @@ st.markdown(
     """
     <style>
     /* ---------- Hide Streamlit chrome / top white gap ---------- */
-    #MainMenu {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
+    #MainMenu {display:none !important; visibility:hidden !important;}
+    footer {display:none !important; visibility:hidden !important;}
     header[data-testid="stHeader"] {
         display: none !important;
+        visibility: hidden !important;
         height: 0 !important;
     }
-    [data-testid="stToolbar"] {display: none !important;}
-    [data-testid="stDecoration"] {display: none !important;}
-    [data-testid="stStatusWidget"] {display: none !important;}
+    [data-testid="stToolbar"] {display:none !important;}
+    [data-testid="stDecoration"] {display:none !important;}
+    [data-testid="stStatusWidget"] {display:none !important;}
+    .stAppDeployButton {display:none !important;}
+    button[kind="header"] {display:none !important;}
 
     html, body, [data-testid="stAppViewContainer"], .stApp {
         background: #f7faff !important;
