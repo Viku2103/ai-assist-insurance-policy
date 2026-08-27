@@ -546,6 +546,7 @@ def validate_government_user(
 
 # --------------------------------------------------
 # FORGOT PASSWORD
+# Supabase recovery OTP flow for Streamlit
 # --------------------------------------------------
 
 def send_password_reset_code(
@@ -558,26 +559,28 @@ def send_password_reset_code(
 
         auth_client = get_public_supabase_client()
 
+        # Supabase sends the Reset Password email.
+        # The recovery email template must display {{ .Token }}
+        # so the user receives a one-time recovery code.
         auth_client.auth.reset_password_for_email(
             email
         )
 
         logger.info(
-            "Password recovery request submitted"
+            "Password recovery code request submitted"
         )
 
-        # Intentionally generic to avoid revealing
-        # whether an email exists in the system.
+        # Generic response prevents user enumeration.
         return (
             True,
             "If the email is registered, a password "
-            "recovery message has been sent."
+            "recovery code has been sent."
         )
 
     except Exception:
 
         logger.exception(
-            "Password recovery request failed"
+            "Password recovery code request failed"
         )
 
         return (
@@ -599,6 +602,7 @@ def complete_password_reset(
 
         auth_client = get_public_supabase_client()
 
+        # Verify the one-time recovery code.
         verification = auth_client.auth.verify_otp(
             {
                 "email": email,
@@ -607,18 +611,39 @@ def complete_password_reset(
             }
         )
 
-        if not verification.user:
+        if (
+            not verification
+            or not verification.user
+            or not verification.session
+        ):
+
+            logger.warning(
+                "Password recovery verification failed"
+            )
 
             return (
                 False,
                 "Invalid or expired recovery code."
             )
 
+        # verify_otp returns an authenticated recovery session.
+        # Explicitly set it on this client before updating password.
+        auth_client.auth.set_session(
+            verification.session.access_token,
+            verification.session.refresh_token
+        )
+
         auth_client.auth.update_user(
             {
                 "password": new_password
             }
         )
+
+        # End the temporary recovery session.
+        try:
+            auth_client.auth.sign_out()
+        except Exception:
+            pass
 
         logger.info(
             "Government user password reset completed"
@@ -627,18 +652,19 @@ def complete_password_reset(
         return (
             True,
             "Password updated successfully. "
-            "You can now sign in with the new password."
+            "You can now sign in with your new password."
         )
 
     except Exception:
 
         logger.exception(
-            "Password recovery verification failed"
+            "Password recovery verification or update failed"
         )
 
         return (
             False,
-            "Invalid or expired recovery code."
+            "Invalid or expired recovery code, or the password "
+            "could not be updated. Please request a new code."
         )
 
 
@@ -1661,8 +1687,8 @@ if not st.session_state.logged_in:
             with forgot_password_tab:
 
                 st.caption(
-                    "Password recovery is available for "
-                    "email-linked Supabase Auth accounts."
+                    "Enter your registered email to receive a "
+                    "one-time password recovery code."
                 )
 
                 recovery_email = st.text_input(
@@ -1677,17 +1703,30 @@ if not st.session_state.logged_in:
                     key="send_recovery_code"
                 ):
 
-                    if not recovery_email.strip():
+                    clean_recovery_email = (
+                        recovery_email.strip().lower()
+                    )
+
+                    if not clean_recovery_email:
 
                         st.warning(
                             "Please enter your registered email."
+                        )
+
+                    elif (
+                        "@" not in clean_recovery_email
+                        or "." not in clean_recovery_email
+                    ):
+
+                        st.warning(
+                            "Please enter a valid email address."
                         )
 
                     else:
 
                         success, message = (
                             send_password_reset_code(
-                                recovery_email
+                                clean_recovery_email
                             )
                         )
 
@@ -1699,84 +1738,143 @@ if not st.session_state.logged_in:
                 st.divider()
 
                 st.caption(
-                    "After receiving the recovery code, "
-                    "enter it below with your new password."
+                    "Enter the recovery code from your email "
+                    "and create a new password."
                 )
 
-                recovery_email_confirm = st.text_input(
-                    "Email for Verification",
-                    placeholder="name@example.com",
-                    key="password_reset_email_confirm"
-                )
-
-                recovery_code = st.text_input(
-                    "Recovery Code",
-                    placeholder="Enter the code received by email",
-                    key="password_recovery_code"
-                )
-
-                new_password = st.text_input(
-                    "New Password",
-                    type="password",
-                    key="new_recovery_password"
-                )
-
-                confirm_new_password = st.text_input(
-                    "Confirm New Password",
-                    type="password",
-                    key="confirm_new_recovery_password"
-                )
-
-                if st.button(
-                    "🔑 Update Password",
-                    type="primary",
-                    use_container_width=True,
-                    key="complete_password_reset"
+                # A form is used here so Streamlit submits all four
+                # recovery values together in one request. This avoids
+                # browser/autofill and rerun-related validation issues.
+                with st.form(
+                    "password_reset_form",
+                    clear_on_submit=False
                 ):
 
-                    if not all(
-                        [
-                            recovery_email_confirm.strip(),
-                            recovery_code.strip(),
-                            new_password
-                        ]
-                    ):
+                    recovery_email_confirm = st.text_input(
+                        "Email for Verification",
+                        placeholder="name@example.com",
+                        key="password_reset_email_confirm"
+                    )
 
-                        st.warning(
-                            "Please complete all password reset fields."
+                    recovery_code = st.text_input(
+                        "Recovery Code",
+                        placeholder="Enter the code from the email",
+                        key="password_recovery_code"
+                    )
+
+                    new_password = st.text_input(
+                        "New Password",
+                        type="password",
+                        key="new_recovery_password"
+                    )
+
+                    confirm_new_password = st.text_input(
+                        "Confirm New Password",
+                        type="password",
+                        key="confirm_new_recovery_password"
+                    )
+
+                    update_password_button = (
+                        st.form_submit_button(
+                            "🔑 Update Password",
+                            type="primary",
+                            use_container_width=True
+                        )
+                    )
+
+                    if update_password_button:
+
+                        clean_email = (
+                            recovery_email_confirm
+                            .strip()
+                            .lower()
                         )
 
-                    elif (
-                        new_password
-                        != confirm_new_password
-                    ):
-
-                        st.warning(
-                            "Passwords do not match."
+                        clean_code = (
+                            recovery_code.strip()
                         )
 
-                    elif len(new_password) < 8:
+                        if not clean_email:
 
-                        st.warning(
-                            "Password must contain at least "
-                            "8 characters."
-                        )
-
-                    else:
-
-                        success, message = (
-                            complete_password_reset(
-                                recovery_email_confirm,
-                                recovery_code,
-                                new_password
+                            st.warning(
+                                "Please enter your registered email."
                             )
-                        )
 
-                        if success:
-                            st.success(message)
+                        elif not clean_code:
+
+                            st.warning(
+                                "Please enter the recovery code "
+                                "from your email."
+                            )
+
+                        elif not new_password:
+
+                            st.warning(
+                                "Please enter a new password."
+                            )
+
+                        elif not confirm_new_password:
+
+                            st.warning(
+                                "Please confirm your new password."
+                            )
+
+                        elif (
+                            "@" not in clean_email
+                            or "." not in clean_email
+                        ):
+
+                            st.warning(
+                                "Please enter a valid email address."
+                            )
+
+                        elif (
+                            new_password
+                            != confirm_new_password
+                        ):
+
+                            st.warning(
+                                "Passwords do not match."
+                            )
+
+                        elif len(new_password) < 8:
+
+                            st.warning(
+                                "Password must contain at least "
+                                "8 characters."
+                            )
+
                         else:
-                            st.error(message)
 
+                            success, message = (
+                                complete_password_reset(
+                                    clean_email,
+                                    clean_code,
+                                    new_password
+                                )
+                            )
+
+                            if success:
+
+                                st.success(message)
+
+                                st.info(
+                                    "Password reset complete. "
+                                    "Open Government Login and sign in "
+                                    "with the same Employee ID and your "
+                                    "new password."
+                                )
+
+                                logger.info(
+                                    "Password reset form completed successfully"
+                                )
+
+                            else:
+
+                                st.error(message)
+
+
+            # ==========================================
             # ==========================================
             # ADMIN LOGIN
             # ==========================================
