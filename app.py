@@ -1,7 +1,11 @@
 import os
-import sqlite3
 import hashlib
+import hmac
+import secrets
 import streamlit as st
+
+from dotenv import load_dotenv
+from supabase import create_client
 
 from src.generation.rag_chain import stream_answer
 from src.retrieval.retriever import get_retriever
@@ -31,10 +35,6 @@ LOGIN_IMAGE_PATH = os.path.join(
 )
 
 
-USER_DB_PATH = os.path.join(
-    BASE_DIR,
-    "users.db"
-)
 
 
 # ==================================================
@@ -52,39 +52,100 @@ if "username" not in st.session_state:
 
 
 # ==================================================
-# USER DATABASE
-# Government employee accounts only
+# AUTHENTICATION DATABASE
+# Supabase PostgreSQL - persistent across deployments
 # ==================================================
 
-def get_user_db_connection():
-    connection = sqlite3.connect(USER_DB_PATH)
-    connection.row_factory = sqlite3.Row
-    return connection
+load_dotenv()
+
+
+def get_config_value(name):
+    """
+    Read configuration locally from .env and on
+    Streamlit Community Cloud from st.secrets.
+    """
+
+    value = os.getenv(name)
+
+    if value:
+        return value
+
+    try:
+        return st.secrets[name]
+    except Exception:
+        return None
+
+
+SUPABASE_URL = get_config_value("SUPABASE_URL")
+SUPABASE_SECRET_KEY = get_config_value("SUPABASE_SECRET_KEY")
+
+
+@st.cache_resource(show_spinner=False)
+def get_supabase_client():
+
+    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+
+        raise RuntimeError(
+            "Supabase configuration is missing. "
+            "Set SUPABASE_URL and SUPABASE_SECRET_KEY."
+        )
+
+    return create_client(
+        SUPABASE_URL,
+        SUPABASE_SECRET_KEY
+    )
+
+
+PASSWORD_ITERATIONS = 600_000
 
 
 def hash_password(password):
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
+    salt = secrets.token_bytes(16)
 
-def initialize_user_database():
-
-    connection = get_user_db_connection()
-
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            employee_id TEXT NOT NULL UNIQUE,
-            department TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'government'
-        )
-        """
+    derived_key = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PASSWORD_ITERATIONS
     )
 
-    connection.commit()
-    connection.close()
+    return (
+        f"pbkdf2_sha256$"
+        f"{PASSWORD_ITERATIONS}$"
+        f"{salt.hex()}$"
+        f"{derived_key.hex()}"
+    )
+
+
+def verify_password(
+    password,
+    stored_hash
+):
+
+    try:
+
+        algorithm, iterations, salt_hex, hash_hex = (
+            stored_hash.split("$", 3)
+        )
+
+        if algorithm != "pbkdf2_sha256":
+            return False
+
+        candidate_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            bytes.fromhex(salt_hex),
+            int(iterations)
+        ).hex()
+
+        return hmac.compare_digest(
+            candidate_hash,
+            hash_hex
+        )
+
+    except (ValueError, AttributeError):
+        return False
 
 
 def create_government_user(
@@ -94,43 +155,71 @@ def create_government_user(
     department
 ):
 
-    connection = get_user_db_connection()
+    employee_id = employee_id.strip()
+    employee_name = username.strip()
+    department = department.strip()
 
     try:
 
-        connection.execute(
-            """
-            INSERT INTO users (
-                username,
-                password_hash,
-                employee_id,
-                department,
-                role
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                username.strip(),
-                hash_password(password),
-                employee_id.strip(),
-                department.strip(),
-                "government"
-            )
+        supabase = get_supabase_client()
+
+        existing = (
+            supabase
+            .table("government_users")
+            .select("id")
+            .eq("employee_id", employee_id)
+            .limit(1)
+            .execute()
         )
 
-        connection.commit()
-        return True, "Government account created successfully."
+        if existing.data:
 
-    except sqlite3.IntegrityError:
+            return (
+                False,
+                "Employee ID already exists."
+            )
+
+        (
+            supabase
+            .table("government_users")
+            .insert(
+                {
+                    "employee_id": employee_id,
+                    "employee_name": employee_name,
+                    "department": department,
+                    "password_hash": hash_password(
+                        password
+                    )
+                }
+            )
+            .execute()
+        )
+
+        return (
+            True,
+            "Government account created successfully."
+        )
+
+    except Exception as error:
+
+        error_text = str(error).lower()
+
+        if (
+            "duplicate" in error_text
+            or "unique" in error_text
+            or "23505" in error_text
+        ):
+
+            return (
+                False,
+                "Employee ID already exists."
+            )
 
         return (
             False,
-            "Username or Employee ID already exists."
+            "Unable to create account. "
+            "Please try again."
         )
-
-    finally:
-
-        connection.close()
 
 
 def validate_government_user(
@@ -138,27 +227,45 @@ def validate_government_user(
     password
 ):
 
-    connection = get_user_db_connection()
+    try:
 
-    user = connection.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE employee_id = ?
-          AND password_hash = ?
-        """,
-        (
-            employee_id.strip(),
-            hash_password(password)
+        supabase = get_supabase_client()
+
+        response = (
+            supabase
+            .table("government_users")
+            .select(
+                "id, employee_id, employee_name, "
+                "department, password_hash"
+            )
+            .eq(
+                "employee_id",
+                employee_id.strip()
+            )
+            .limit(1)
+            .execute()
         )
-    ).fetchone()
 
-    connection.close()
+        if not response.data:
+            return None
 
-    return user
+        user = response.data[0]
 
+        if not verify_password(
+            password,
+            user.get("password_hash")
+        ):
+            return None
 
-initialize_user_database()
+        return {
+            "id": user.get("id"),
+            "employee_id": user.get("employee_id"),
+            "employee_name": user.get("employee_name"),
+            "department": user.get("department")
+        }
+
+    except Exception:
+        return None
 
 
 # ==================================================
@@ -974,8 +1081,7 @@ with st.sidebar:
 
     else:
 
-        # Government users and the existing admin
-        # can access both collections.
+        # Government users can access both collections.
         scheme_options = [
             "Synthetic Insurance",
             "Tamil Nadu NHIS 2026"
@@ -1031,8 +1137,7 @@ with st.sidebar:
 
     role_labels = {
         "public": "🌐 Public User",
-        "government": "🏛️ Government User",
-        "admin": "🛡️ Administrator"
+        "government": "🏛️ Government User"
     }
 
     st.caption(
@@ -1363,4 +1468,4 @@ st.html(
         🛡️ AI Assist • Retrieval-Augmented Generation for Insurance Policy Understanding
     </div>
     """
-)
+)   
