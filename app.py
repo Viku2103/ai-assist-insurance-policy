@@ -1343,6 +1343,238 @@ if not st.session_state.logged_in:
                 font-size: 30px;
             }
         }
+        
+        /* ==================================================
+           CROSS-DEVICE / THEME HARDENING
+           Keeps text readable across light/dark OS themes,
+           browser zoom levels, and common laptop resolutions.
+        ================================================== */
+        :root {
+            color-scheme: light !important;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100% !important;
+            text-size-adjust: 100% !important;
+        }
+
+        html, body, .stApp, [data-testid="stAppViewContainer"] {
+            color-scheme: light !important;
+            color: #183153 !important;
+        }
+
+        /* Prevent accidental clipping caused by inherited styles */
+        .stApp *,
+        [data-testid="stAppViewContainer"] * {
+            box-sizing: border-box !important;
+        }
+
+        p, span, label, div, small, strong, h1, h2, h3, h4, h5, h6 {
+            overflow-wrap: break-word;
+            word-break: normal;
+        }
+
+        /* Native Streamlit text should never inherit dark-theme colours */
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] li,
+        [data-testid="stMarkdownContainer"] span,
+        [data-testid="stCaptionContainer"],
+        [data-testid="stWidgetLabel"],
+        [data-testid="stWidgetLabel"] p {
+            color: #29415f !important;
+        }
+
+        /* Form controls */
+        input,
+        textarea,
+        [data-baseweb="input"] input,
+        [data-baseweb="textarea"] textarea {
+            background-color: #ffffff !important;
+            color: #1b304d !important;
+            -webkit-text-fill-color: #1b304d !important;
+            opacity: 1 !important;
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+            color: #8b99aa !important;
+            -webkit-text-fill-color: #8b99aa !important;
+            opacity: 1 !important;
+        }
+
+        /* Chrome/Edge autofill can otherwise create unreadable text */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #1b304d !important;
+            -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+            box-shadow: 0 0 0 1000px #ffffff inset !important;
+            caret-color: #1b304d !important;
+        }
+
+        /* Select / dropdown */
+        [data-baseweb="select"] > div,
+        [data-baseweb="popover"] > div,
+        [role="listbox"],
+        [role="option"] {
+            background: #ffffff !important;
+            color: #1b304d !important;
+        }
+
+        [data-baseweb="select"] span,
+        [role="option"] {
+            color: #1b304d !important;
+        }
+
+        /* Tabs */
+        button[data-baseweb="tab"],
+        button[data-baseweb="tab"] p,
+        button[data-baseweb="tab"] span {
+            color: #38516f !important;
+        }
+
+        button[data-baseweb="tab"][aria-selected="true"],
+        button[data-baseweb="tab"][aria-selected="true"] p,
+        button[data-baseweb="tab"][aria-selected="true"] span {
+            color: #17365f !important;
+        }
+
+        /* Buttons */
+        .stButton > button,
+        .stFormSubmitButton > button,
+        button[data-testid="stBaseButton-secondary"] {
+            color: #24415f !important;
+            background: #ffffff !important;
+            border-color: #d6e2ef !important;
+        }
+
+        .stButton > button[kind="primary"],
+        .stFormSubmitButton > button[kind="primary"],
+        button[data-testid="stBaseButton-primary"] {
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+        }
+
+        /* Expanders */
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] summary p,
+        [data-testid="stExpander"] summary span {
+            color: #29415f !important;
+        }
+
+        /* Alerts: let alert container retain semantic background,
+           but keep text readable */
+        [data-testid="stAlert"] p,
+        [data-testid="stAlert"] div {
+            opacity: 1 !important;
+        }
+
+        /* Images and media should never force horizontal overflow */
+        img, svg, video, canvas {
+            max-width: 100% !important;
+        }
+
+        /* Avoid words disappearing when browser zoom/scaling changes */
+        .landing-topbar,
+        .landing-brand-wrap,
+        .hero-shell,
+        .hero-grid,
+        .feature-grid-login,
+        .benefit-grid,
+        .kb-strip {
+            min-width: 0 !important;
+        }
+
+        /* 1366px-class laptops / Windows 125% scaling */
+        @media (max-width: 1366px) {
+
+            .landing-brand-title {
+                font-size: clamp(20px, 2vw, 26px) !important;
+            }
+
+            .hero-title-login {
+                font-size: clamp(30px, 3.25vw, 44px) !important;
+            }
+
+            .access-title {
+                font-size: clamp(24px, 2.2vw, 32px) !important;
+            }
+        }
+
+        /* Smaller laptop viewport caused by 125–150% display scaling */
+        @media (max-width: 1180px) {
+            .landing-trust {
+                white-space: normal !important;
+                text-align: center !important;
+            }
+
+            button[data-baseweb="tab"] p {
+                font-size: 10.5px !important;
+            }
+        }
+
+        /* Very narrow desktops / tablets */
+        @media (max-width: 900px) {
+            .landing-topbar {
+                flex-wrap: wrap !important;
+            }
+
+            .landing-trust {
+                width: 100% !important;
+            }
+        }
+
+        
+        /* FINAL VIEWPORT WIDTH FIX
+           Do not force Streamlit's main container wider than its viewport. */
+        html, body, .stApp, [data-testid="stAppViewContainer"],
+        [data-testid="stMain"], [data-testid="stMainBlockContainer"] {
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+        }
+
+        .block-container,
+        [data-testid="stMainBlockContainer"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            padding-left: clamp(1rem, 2.2vw, 2.25rem) !important;
+            padding-right: clamp(1rem, 2.2vw, 2.25rem) !important;
+        }
+
+        [data-testid="stHorizontalBlock"] {
+            max-width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        [data-testid="column"] {
+            min-width: 0 !important;
+        }
+
+        /* At effective narrow widths (including Windows display scaling),
+           stack Streamlit columns instead of cutting the right-most card. */
+        @media (max-width: 1050px) {
+            [data-testid="stHorizontalBlock"] {
+                flex-wrap: wrap !important;
+                gap: 1rem !important;
+            }
+
+            [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+                flex: 1 1 100% !important;
+                width: 100% !important;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+            }
+        }
+
         </style>
         """,
         unsafe_allow_html=True
@@ -2373,7 +2605,239 @@ st.markdown(
             flex-wrap: wrap;
         }
     }
-    </style>
+    
+        /* ==================================================
+           CROSS-DEVICE / THEME HARDENING
+           Keeps text readable across light/dark OS themes,
+           browser zoom levels, and common laptop resolutions.
+        ================================================== */
+        :root {
+            color-scheme: light !important;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100% !important;
+            text-size-adjust: 100% !important;
+        }
+
+        html, body, .stApp, [data-testid="stAppViewContainer"] {
+            color-scheme: light !important;
+            color: #183153 !important;
+        }
+
+        /* Prevent accidental clipping caused by inherited styles */
+        .stApp *,
+        [data-testid="stAppViewContainer"] * {
+            box-sizing: border-box !important;
+        }
+
+        p, span, label, div, small, strong, h1, h2, h3, h4, h5, h6 {
+            overflow-wrap: break-word;
+            word-break: normal;
+        }
+
+        /* Native Streamlit text should never inherit dark-theme colours */
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] li,
+        [data-testid="stMarkdownContainer"] span,
+        [data-testid="stCaptionContainer"],
+        [data-testid="stWidgetLabel"],
+        [data-testid="stWidgetLabel"] p {
+            color: #29415f !important;
+        }
+
+        /* Form controls */
+        input,
+        textarea,
+        [data-baseweb="input"] input,
+        [data-baseweb="textarea"] textarea {
+            background-color: #ffffff !important;
+            color: #1b304d !important;
+            -webkit-text-fill-color: #1b304d !important;
+            opacity: 1 !important;
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+            color: #8b99aa !important;
+            -webkit-text-fill-color: #8b99aa !important;
+            opacity: 1 !important;
+        }
+
+        /* Chrome/Edge autofill can otherwise create unreadable text */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #1b304d !important;
+            -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+            box-shadow: 0 0 0 1000px #ffffff inset !important;
+            caret-color: #1b304d !important;
+        }
+
+        /* Select / dropdown */
+        [data-baseweb="select"] > div,
+        [data-baseweb="popover"] > div,
+        [role="listbox"],
+        [role="option"] {
+            background: #ffffff !important;
+            color: #1b304d !important;
+        }
+
+        [data-baseweb="select"] span,
+        [role="option"] {
+            color: #1b304d !important;
+        }
+
+        /* Tabs */
+        button[data-baseweb="tab"],
+        button[data-baseweb="tab"] p,
+        button[data-baseweb="tab"] span {
+            color: #38516f !important;
+        }
+
+        button[data-baseweb="tab"][aria-selected="true"],
+        button[data-baseweb="tab"][aria-selected="true"] p,
+        button[data-baseweb="tab"][aria-selected="true"] span {
+            color: #17365f !important;
+        }
+
+        /* Buttons */
+        .stButton > button,
+        .stFormSubmitButton > button,
+        button[data-testid="stBaseButton-secondary"] {
+            color: #24415f !important;
+            background: #ffffff !important;
+            border-color: #d6e2ef !important;
+        }
+
+        .stButton > button[kind="primary"],
+        .stFormSubmitButton > button[kind="primary"],
+        button[data-testid="stBaseButton-primary"] {
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+        }
+
+        /* Expanders */
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] summary p,
+        [data-testid="stExpander"] summary span {
+            color: #29415f !important;
+        }
+
+        /* Alerts: let alert container retain semantic background,
+           but keep text readable */
+        [data-testid="stAlert"] p,
+        [data-testid="stAlert"] div {
+            opacity: 1 !important;
+        }
+
+        /* Images and media should never force horizontal overflow */
+        img, svg, video, canvas {
+            max-width: 100% !important;
+        }
+
+        /* Avoid words disappearing when browser zoom/scaling changes */
+        .landing-topbar,
+        .landing-brand-wrap,
+        .hero-shell,
+        .hero-grid,
+        .feature-grid-login,
+        .benefit-grid,
+        .kb-strip {
+            min-width: 0 !important;
+        }
+
+        /* 1366px-class laptops / Windows 125% scaling */
+        @media (max-width: 1366px) {
+
+            .landing-brand-title {
+                font-size: clamp(20px, 2vw, 26px) !important;
+            }
+
+            .hero-title-login {
+                font-size: clamp(30px, 3.25vw, 44px) !important;
+            }
+
+            .access-title {
+                font-size: clamp(24px, 2.2vw, 32px) !important;
+            }
+        }
+
+        /* Smaller laptop viewport caused by 125–150% display scaling */
+        @media (max-width: 1180px) {
+            .landing-trust {
+                white-space: normal !important;
+                text-align: center !important;
+            }
+
+            button[data-baseweb="tab"] p {
+                font-size: 10.5px !important;
+            }
+        }
+
+        /* Very narrow desktops / tablets */
+        @media (max-width: 900px) {
+            .landing-topbar {
+                flex-wrap: wrap !important;
+            }
+
+            .landing-trust {
+                width: 100% !important;
+            }
+        }
+
+        
+        /* FINAL VIEWPORT WIDTH FIX
+           Do not force Streamlit's main container wider than its viewport. */
+        html, body, .stApp, [data-testid="stAppViewContainer"],
+        [data-testid="stMain"], [data-testid="stMainBlockContainer"] {
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+        }
+
+        .block-container,
+        [data-testid="stMainBlockContainer"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            padding-left: clamp(1rem, 2.2vw, 2.25rem) !important;
+            padding-right: clamp(1rem, 2.2vw, 2.25rem) !important;
+        }
+
+        [data-testid="stHorizontalBlock"] {
+            max-width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        [data-testid="column"] {
+            min-width: 0 !important;
+        }
+
+        /* At effective narrow widths (including Windows display scaling),
+           stack Streamlit columns instead of cutting the right-most card. */
+        @media (max-width: 1050px) {
+            [data-testid="stHorizontalBlock"] {
+                flex-wrap: wrap !important;
+                gap: 1rem !important;
+            }
+
+            [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+                flex: 1 1 100% !important;
+                width: 100% !important;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+            }
+        }
+
+        </style>
     """,
     unsafe_allow_html=True
 )
