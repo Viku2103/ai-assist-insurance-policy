@@ -1,24 +1,12 @@
 from functools import lru_cache
-from pathlib import Path
 
-from langchain_chroma import Chroma
-
-from src.embeddings.embedding_model import get_embedding_model
-
-
-BASE_DIR = Path(__file__).resolve().parents[2]
-CHROMA_DIR = BASE_DIR / "chroma_db"
+from src.vectorstore.runtime_store import get_vector_store
 
 
 @lru_cache(maxsize=2)
 def get_retriever(scheme=None):
 
-    embeddings = get_embedding_model()
-
-    vector_store = Chroma(
-        persist_directory=str(CHROMA_DIR),
-        embedding_function=embeddings
-    )
+    vector_store = get_vector_store()
 
     if scheme:
 
