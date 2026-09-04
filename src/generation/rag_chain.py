@@ -93,25 +93,14 @@ def ask_question(
 
     total_start = time.time()
 
-
-    # ----------------------------------------------
-    # RETRIEVER INITIALIZATION
-    # ----------------------------------------------
-
     init_start = time.time()
 
     if retriever is None:
-
         retriever = get_retriever(
             scheme=scheme
         )
 
     init_time = time.time() - init_start
-
-
-    # ----------------------------------------------
-    # RETRIEVAL
-    # ----------------------------------------------
 
     retrieval_start = time.time()
 
@@ -123,11 +112,6 @@ def ask_question(
         time.time() - retrieval_start
     )
 
-
-    # ----------------------------------------------
-    # PROMPT
-    # ----------------------------------------------
-
     prompt_start = time.time()
 
     prompt = create_prompt(
@@ -138,11 +122,6 @@ def ask_question(
     prompt_time = (
         time.time() - prompt_start
     )
-
-
-    # ----------------------------------------------
-    # GEMINI
-    # ----------------------------------------------
 
     llm = get_llm()
 
@@ -156,56 +135,38 @@ def ask_question(
         time.time() - gemini_start
     )
 
-
-    # ----------------------------------------------
-    # RESPONSE PROCESSING
-    # ----------------------------------------------
-
     answer = extract_text(
         response.content
     )
-
-
-    # ----------------------------------------------
-    # TOTAL TIME
-    # ----------------------------------------------
 
     total_time = (
         time.time() - total_start
     )
 
-
     print("\n==============================")
     print("PERFORMANCE")
     print("==============================")
-
     print(
         f"Retriever initialization: "
         f"{init_time:.2f} seconds"
     )
-
     print(
         f"Retrieval time: "
         f"{retrieval_time:.2f} seconds"
     )
-
     print(
         f"Prompt creation: "
         f"{prompt_time:.2f} seconds"
     )
-
     print(
         f"Gemini time: "
         f"{gemini_time:.2f} seconds"
     )
-
     print(
         f"Total time: "
         f"{total_time:.2f} seconds"
     )
-
     print("==============================\n")
-
 
     return answer, documents
 
@@ -226,16 +187,41 @@ def stream_answer(
 
     llm = get_llm()
 
-    for chunk in llm.stream(
-        prompt
-    ):
+    try:
 
-        text = extract_text(
-            chunk.content
+        for chunk in llm.stream(
+            prompt
+        ):
+
+            text = extract_text(
+                chunk.content
+            )
+
+            if text:
+                yield text
+
+    except Exception as error:
+
+        print(
+            "\n=============================="
+        )
+        print(
+            "GEMINI STREAMING ERROR"
+        )
+        print(
+            "=============================="
+        )
+        print(
+            repr(error)
+        )
+        print(
+            "==============================\n"
         )
 
-        if text:
-            yield text
+        yield (
+            "\n\n⚠️ The AI response was interrupted. "
+            "Please try the question again."
+        )
 
 
 # ==================================================
@@ -255,7 +241,6 @@ if __name__ == "__main__":
     )
 
     print("\nANSWER:\n")
-
     print(answer)
 
     print("\nSOURCES:")
